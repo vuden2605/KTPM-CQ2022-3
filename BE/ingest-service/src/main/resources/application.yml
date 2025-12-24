@@ -1,7 +1,10 @@
 spring:
   application:
     name: ingest-service
+  
+  server:
     port: 8081
+    
   redis:
     host: localhost
     port: 6379

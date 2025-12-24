@@ -1,0 +1,172 @@
+.watchlist {
+  width: 350px;
+  height: 100vh;
+  background: #1e222d;
+  color: #d1d4dc;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #2b2f3a;
+  overflow-y: auto;
+}
+
+.watchlist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #2b2f3a;
+}
+
+.watchlist-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.add-btn {
+  background: transparent;
+  border: 1px solid #2b2f3a;
+  color: #d1d4dc;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.add-btn:hover {
+  background: #2b2f3a;
+}
+
+.watchlist-items {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.watchlist-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #2b2f3a;
+  transition: background 0.2s;
+}
+
+.watchlist-item:hover {
+  background: #2b2f3a;
+}
+
+.watchlist-item.selected {
+  background: #2b3647;
+  border-left: 3px solid #2962ff;
+}
+
+.symbol-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.symbol-icon {
+  font-size: 20px;
+}
+
+.symbol-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.symbol-code {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.symbol-name {
+  font-size: 11px;
+  color: #787b86;
+}
+
+.symbol-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.price {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.change {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+}
+
+.change.positive {
+  color: #26a69a;
+  background: rgba(38, 166, 154, 0.1);
+}
+
+.change.negative {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.1);
+}
+
+.symbol-detail {
+  padding: 16px;
+  border-top: 1px solid #2b2f3a;
+  background: #131722;
+}
+
+.symbol-detail h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.detail-row .label {
+  color: #787b86;
+}
+
+.detail-row .value {
+  font-weight: 600;
+}
+
+.detail-row .value.positive {
+  color: #26a69a;
+}
+
+.detail-row .value.negative {
+  color: #ef5350;
+}
+
+/* Scrollbar styling */
+.watchlist-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.watchlist-items::-webkit-scrollbar-track {
+  background: #1e222d;
+}
+
+.watchlist-items::-webkit-scrollbar-thumb {
+  background: #2b2f3a;
+  border-radius: 3px;
+}
+
+.watchlist-items::-webkit-scrollbar-thumb:hover {
+  background: #363a45;
+}
