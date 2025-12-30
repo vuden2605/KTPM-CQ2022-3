@@ -81,7 +81,7 @@ export const CandlestickChart = ({ symbol }: CandlestickChartProps) => {
     candlestickSeries.setData(seed as any);
 
     // Connect to WebSocket
-    const websocket = new WebSocket(`ws://localhost:8083/ws/candles/${symbol}`);
+    const websocket = new WebSocket(`ws://localhost:8083/ws`);
 
     // If websocket never opens, start mock updates
     const startMockUpdates = () => {
@@ -118,21 +118,37 @@ export const CandlestickChart = ({ symbol }: CandlestickChartProps) => {
         clearInterval(mockIntervalRef.current as number);
         mockIntervalRef.current = null;
       }
+
+      // Send SUBSCRIBE message to backend
+      const subscribeMsg = {
+        type: 'SUBSCRIBE',
+        symbol: symbol,
+        interval: '1m'
+      };
+      websocket.send(JSON.stringify(subscribeMsg));
+      console.log('Sent SUBSCRIBE:', subscribeMsg);
     };
 
     websocket.onmessage = (event) => {
       try {
         const candle = JSON.parse(event.data);
+        console.log('Received candle:', candle);
+
+        // Parse backend Candle format: openTime (ISO), open (BigDecimal), etc.
+        const timestamp = candle.openTime ? new Date(candle.openTime).getTime() / 1000
+          : candle.timestamp ? candle.timestamp / 1000
+            : Math.floor(Date.now() / 1000);
+
         const candleData: CandlestickData = {
-          time: Math.floor(candle.timestamp / 1000) as Time,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
+          time: Math.floor(timestamp) as Time,
+          open: parseFloat(candle.open),
+          high: parseFloat(candle.high),
+          low: parseFloat(candle.low),
+          close: parseFloat(candle.close),
         };
         candlestickSeries.update(candleData as any);
       } catch (error) {
-        console.error('Error parsing candle data:', error);
+        console.error('Error parsing candle data:', error, event.data);
       }
     };
 
