@@ -79,6 +79,7 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
 				if (session.isOpen()) {
 					executor.submit(() -> {
 						try {
+							log.info("Send to session {}", session.getId());
 							session.sendMessage(new TextMessage(payload));
 						} catch (IOException e) {
 							throw new RuntimeException(e);
