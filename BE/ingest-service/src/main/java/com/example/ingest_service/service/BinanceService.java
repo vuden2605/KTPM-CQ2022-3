@@ -1,6 +1,6 @@
 package com.example.ingest_service.service;
 
-import com.example.ingest_service.dto.Candle;
+import com.example.ingest_service.dto.request.Candle;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.net.URI;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +22,7 @@ import java.util.List;
 public class BinanceService {
 	private final RedisService redisService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
-
+	private final BinanceRestService binanceRestService;
 	@Value("${binance.ws.base-url}")
 	private String baseUrl;
 
@@ -56,9 +55,28 @@ public class BinanceService {
 	}
 	@PostConstruct
 	public void startBinanceWebSocket() {
+		backfillOnStart();
 		String url = buildStreamUrl();
 		WebSocketClient client = createClient(url);
 		client.connect();
+	}
+
+	private void backfillOnStart() {
+		for (String symbol : symbols) {
+			for (String interval : intervals) {
+				try {
+					List<Candle> candles = binanceRestService.fetchLast1000ClosedCandles(symbol, interval);
+					String baseKey = String.format("candle:%s:%s", symbol, interval);
+					for (Candle c : candles) {
+						String json = objectMapper.writeValueAsString(c);
+						redisService.publishCandle(baseKey + ":closed", json);
+					}
+					log.info("Backfilled {} candles for {} {}", candles.size(), symbol, interval);
+				} catch (Exception e) {
+					log.error("Error backfilling {} {}: {}", symbol, interval, e.getMessage(), e);
+				}
+			}
+		}
 	}
 	private WebSocketClient createClient(String url) {
 		return new WebSocketClient(URI.create(url)) {
@@ -79,15 +97,16 @@ public class BinanceService {
 						String stream = node.get("stream").asText();
 						String[] streamParts = stream.split("@");
 						String symbol = streamParts[0].toUpperCase();
-						String interval = streamParts[1].substring(6); // Removes "kline_"
+						String interval = streamParts[1].substring(6);
 						Candle candle = parseCandle(data, symbol, interval);
 
 						String key = String.format("candle:%s:%s", symbol, interval);
 						String candleJson = objectMapper.writeValueAsString(candle);
 						log.info("Publishing to key: {}, candle: {}", key, candleJson);
-						redisService.publishCandle(key, candleJson);
-
-						log.debug("Candle saved: {} - {}", symbol, candle.getOpenTime());
+						redisService.publishCandle(key + ":realtime", candleJson);
+						if (candle != null && Boolean.TRUE.equals(candle.getIsClosed())) {
+							redisService.publishCandle(key + ":closed", candleJson);
+						}
 					}
 				} catch (Exception e) {
 					log.error("Error processing message", e);
@@ -106,14 +125,13 @@ public class BinanceService {
 	}
 
 	private Candle parseCandle(JsonNode node, String symbol, String interval) {
-		JsonNode k = node.path("k"); // safe
-		if(k.isMissingNode()) return null; // skip nếu k không tồn tại
-
+		JsonNode k = node.path("k");
+		if(k.isMissingNode()) return null;
 		return Candle.builder()
 				.symbol(symbol)
 				.interval(interval)
-				.openTime(Instant.ofEpochMilli(k.path("t").asLong(0)))
-				.closeTime(Instant.ofEpochMilli(k.path("T").asLong(0)))
+				.openTime((k.path("t").asLong(0)))
+				.closeTime((k.path("T").asLong(0)))
 				.open(new BigDecimal(k.path("o").asText("0")))
 				.high(new BigDecimal(k.path("h").asText("0")))
 				.low(new BigDecimal(k.path("l").asText("0")))

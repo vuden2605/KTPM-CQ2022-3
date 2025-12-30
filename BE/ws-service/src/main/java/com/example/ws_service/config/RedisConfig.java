@@ -21,7 +21,7 @@ public class RedisConfig {
 
 		container.addMessageListener(
 				subscriber,
-				new PatternTopic("candle:*")
+				new PatternTopic("candle:*:*:realtime")
 		);
 
 		return container;
