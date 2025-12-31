@@ -8,6 +8,7 @@ import com.example.storage_service.repository.CandleRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -41,7 +42,11 @@ public class CandleService {
 			Candle candleEntity = candleMapper.toCandle(request);
 			candleCacheService.cacheCandle(candleEntity);
 			candleRepository.saveAndFlush(candleEntity);
-		} catch (Exception e) {
+		}catch (DataIntegrityViolationException e) {
+			log.debug("Duplicate candle ignored: {} {} {}",
+					request.getSymbol(), request.getInterval(), request.getOpenTime());
+		}
+		 catch (Exception e) {
 			log.debug(e.getMessage(), e);
 		}
 	}

@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -55,10 +56,16 @@ public class BinanceService {
 	}
 	@PostConstruct
 	public void startBinanceWebSocket() {
-		backfillOnStart();
 		String url = buildStreamUrl();
 		WebSocketClient client = createClient(url);
 		client.connect();
+		log.info("WebSocket connecting to {}", url);
+
+		CompletableFuture. runAsync(this::backfillOnStart)
+				.exceptionally(ex -> {
+					log.error("Backfill failed", ex);
+					return null;
+				});
 	}
 
 	private void backfillOnStart() {

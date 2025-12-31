@@ -11,6 +11,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,17 +76,28 @@ public class MarketWebSocketHandler extends TextWebSocketHandler {
 
 		Set<WebSocketSession> subs = topicSubscribers.get(topic);
 		if (subs == null || subs.isEmpty()) return;
-
-		for (WebSocketSession session : subs) {
-			try {
-				if (session.isOpen()) {
-					log.info("Send to session {} : {}", session.getId(), payload);
-					session.sendMessage(new TextMessage(payload));
+		TextMessage message = new TextMessage(payload);
+		List<WebSocketSession> snapshot = new ArrayList<>(subs);
+		for (WebSocketSession session : snapshot) {
+			executor. submit(() -> {
+				try {
+					if (session.isOpen()) {
+						log.info("Send to session {}: {}", session.getId(), payload);
+						session.sendMessage(message);
+					} else {
+						removeSubscriber(topic, session);
+					}
+				} catch (Exception e) {
+					log.error("WS send error to session {}:  {}", session.getId(), e.getMessage());
+					removeSubscriber(topic, session);
 				}
-			} catch (Exception e) {
-				log.error("WS send error", e);
-			}
+			});
 		}
 	}
-
+	private void removeSubscriber(String topic, WebSocketSession session) {
+		Set<WebSocketSession> subs = topicSubscribers. get(topic);
+		if (subs != null) {
+			subs.remove(session);
+		}
+	}
 }
