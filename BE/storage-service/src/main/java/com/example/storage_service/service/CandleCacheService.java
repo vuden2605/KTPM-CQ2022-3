@@ -9,6 +9,7 @@ import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 
 @Service
@@ -32,10 +33,11 @@ public class CandleCacheService {
 			double score = candle.getOpenTime().doubleValue();
 
 			redisTemplate.opsForZSet().add(key, json, score);
-			Long size = redisTemplate.opsForZSet().zCard(key);
-			if (size != null && size > MAX_CANDLES_IN_CACHE) {
-				long removeCount = size - MAX_CANDLES_IN_CACHE;
-				redisTemplate.opsForZSet().removeRange(key, 0, removeCount - 1);
+			redisTemplate.opsForZSet()
+					.removeRange(key, 0, -MAX_CANDLES_IN_CACHE - 1);
+			Long ttl = redisTemplate.getExpire(key);
+			if (ttl < 0) {
+				redisTemplate.expire(key, Duration.ofDays(2));
 			}
 		} catch (Exception e) {
 			log.error("Error caching candle: {}", e.getMessage(), e);
