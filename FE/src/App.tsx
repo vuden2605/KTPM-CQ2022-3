@@ -4,7 +4,7 @@ import { Watchlist } from './components/Watchlist';
 import './App.css';
 
 function App() {
-  const [selectedSymbol, setSelectedSymbol] = useState('VCB');
+  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
 
   return (
     <div className="app">

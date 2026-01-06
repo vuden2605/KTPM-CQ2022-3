@@ -16,32 +16,23 @@ interface WatchlistProps {
 }
 
 export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
+  // Only show cryptocurrency pairs supported by the backend ingest-service
   const [symbols] = useState<Symbol[]>([
-    { code: 'NDQ', name: 'NASDAQ', price: 25587.83, change: 126.13, changePercent: 0.50, type: 'index' },
-    { code: 'VIX', name: 'VIX', price: 14.01, change: -0.08, changePercent: -0.57, type: 'index' },
-    { code: 'BTCUSD', name: 'Bitcoin', price: 86790, change: -627, changePercent: -0.72, type: 'crypto' },
-    { code: 'BTCUSDT', name: 'Bitcoin USDT', price: 86873.13, change: -612.87, changePercent: -0.70, type: 'crypto' },
-    { code: 'ETHUSD', name: 'Ethereum', price: 2925.2, change: -37.6, changePercent: -1.27, type: 'crypto' },
-    { code: 'HPG', name: 'Hòa Phát', price: 26650, change: -100, changePercent: -0.37, type: 'stock' },
-    { code: 'VCB', name: 'Vietcombank', price: 56900, change: -300, changePercent: -0.52, type: 'stock' },
+    { code: 'BTCUSDT', name: 'Bitcoin / USDT', price: 86873.13, change: -612.87, changePercent: -0.70, type: 'crypto' },
+    { code: 'ETHUSDT', name: 'Ethereum / USDT', price: 2925.2, change: -37.6, changePercent: -1.27, type: 'crypto' },
+    { code: 'BNBUSDT', name: 'BNB / USDT', price: 320.5, change: 2.1, changePercent: 0.66, type: 'crypto' },
+    { code: 'XRPUSDT', name: 'XRP / USDT', price: 0.62, change: -0.01, changePercent: -1.59, type: 'crypto' },
+    { code: 'ADAUSDT', name: 'ADA / USDT', price: 0.42, change: 0.005, changePercent: 1.20, type: 'crypto' },
   ]);
 
   const getSymbolIcon = (type: string) => {
-    switch (type) {
-      case 'crypto':
-        return '₿';
-      case 'index':
-        return '📊';
-      default:
-        return '🏢';
-    }
+    return '₿';
   };
 
   return (
     <div className="watchlist">
       <div className="watchlist-header">
-        <h3>Danh sách theo dõi</h3>
-        <button className="add-btn">+</button>
+        <h3>Danh sách theo dõi (Crypto)</h3>
       </div>
 
       <div className="watchlist-items">

@@ -1,0 +1,27 @@
+.metrics-panel {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #e6eef6;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.metrics-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.metrics-row strong {
+  color: #9fb3d0
+}
+
+.metrics-row span {
+  font-weight: 600
+}
