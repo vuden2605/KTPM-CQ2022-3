@@ -1,23 +1,22 @@
 version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
-    container_name:  crypto-postgres
+    container_name: crypto-postgres
     restart: unless-stopped
     ports:
       - "5432:5432"
     environment:
       POSTGRES_DB: crypto_db
-      POSTGRES_USER:  postgres
-      POSTGRES_PASSWORD:  postgres123
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - crypto-network
     healthcheck:
-      test:  ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,12 +38,40 @@ services:
       timeout: 5s
       retries: 5
 
+  mysql:
+    image: mysql:8.0
+    container_name: crypto-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: crypto_db
+      MYSQL_USER: crypto_user
+      MYSQL_PASSWORD: crypto123
+      MYSQL_ROOT_PASSWORD: root123
+    command: [
+      "--default-authentication-plugin=mysql_native_password",
+      "--character-set-server=utf8mb4",
+      "--collation-server=utf8mb4_unicode_ci"
+    ]
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - crypto-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot123 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
     driver: local
   redis_data:
     driver: local
   pgadmin_data:
+    driver: local
+  mysql_data:
     driver: local
 
 networks:
