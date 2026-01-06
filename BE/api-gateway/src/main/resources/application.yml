@@ -14,3 +14,9 @@ spring:
               - Path=${app.api-prefix}/auth/**
             filters:
               - StripPrefix=2
+          - id: storage_service
+            uri: http://localhost:8082
+            predicates:
+              - Path=${app.api-prefix}/candles/**
+            filters:
+              - StripPrefix=2

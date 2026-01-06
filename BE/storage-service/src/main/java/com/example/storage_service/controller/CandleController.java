@@ -4,6 +4,7 @@ import com.example.storage_service.dto.request.CandleBatchRequest;
 import com.example.storage_service.dto.request.CandleCreationRequest;
 import com.example.storage_service.dto.response.ApiResponse;
 import com.example.storage_service.dto.response.CandleResponse;
+import com.example.storage_service.service.CandleCacheService;
 import com.example.storage_service.service.CandleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,12 +12,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/candles")
 @Slf4j
 public class CandleController {
 	private final CandleService candleService;
+	private final CandleCacheService candleCacheService;
 	@PostMapping
 	public ApiResponse<CandleResponse> createCandle(@RequestBody CandleCreationRequest request) {
 		log.info("Received request to create candle: {}", request);
@@ -51,5 +55,23 @@ public class CandleController {
 				.message("Last open time retrieved successfully")
 				.build();
 	}
+	@GetMapping("/recent")
+	public ApiResponse<List<CandleCreationRequest>> getRecentCandles(
+			@RequestParam("symbol") String symbol,
+			@RequestParam("interval") String interval,
+			@RequestParam(value = "limit", defaultValue = "1000") int limit
+	) {
+		if (limit <= 0) limit = 1;
+		if (limit > 1000) limit = 1000;
+
+		List<CandleCreationRequest> candles =
+				candleCacheService.getRecentCandlesFromRedis(symbol, interval, limit);
+
+		return ApiResponse.<List<CandleCreationRequest>>builder()
+				.data(candles)
+				.message("Fetched recent candles from Redis successfully")
+				.build();
+	}
+
 
 }

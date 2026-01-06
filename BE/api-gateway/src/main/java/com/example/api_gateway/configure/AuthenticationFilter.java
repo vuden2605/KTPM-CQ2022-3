@@ -35,7 +35,8 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 	AuthenticationService authenticationService;
 	ObjectMapper objectMapper;
 	private final List<String> publicUrls = List.of(
-
+		"/auth/.*",
+		"/candles/.*"
 	);
 
 	@NonFinal
@@ -45,10 +46,10 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 		log.info("AuthenticationFilter called");
-//		if(isPublicEndpoint(exchange.getRequest())) {
-//			log.info("Public endpoint accessed: {}", exchange.getRequest().getURI().getPath());
-//			return chain.filter(exchange);
-//		}
+		if(isPublicEndpoint(exchange.getRequest())) {
+			log.info("Public endpoint accessed: {}", exchange.getRequest().getURI().getPath());
+			return chain.filter(exchange);
+		}
 		List<String> authHeaders = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION);
 		if (CollectionUtils.isEmpty(authHeaders))
 			return unauthenticated(exchange.getResponse());

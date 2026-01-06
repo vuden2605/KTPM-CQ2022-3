@@ -68,4 +68,5 @@ public class CandleService {
 
 		log.info("Saved & cached {} closed candles for {} {}", candles.size(), symbol, interval);
 	}
+
 }

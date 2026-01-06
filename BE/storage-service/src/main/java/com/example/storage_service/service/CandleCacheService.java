@@ -10,7 +10,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -72,4 +75,29 @@ public class CandleCacheService {
 			throw new RuntimeException(e);
 		}
 	}
+	public List<CandleCreationRequest> getRecentCandlesFromRedis(String symbol, String interval, int limit) {
+		String key = getCacheKey(symbol, interval);
+
+		Set<Object> rawSet = redisTemplate.opsForZSet()
+				.reverseRange(key, 0, limit - 1);
+
+		List<CandleCreationRequest> list = new ArrayList<>();
+		if (rawSet == null || rawSet.isEmpty()) {
+			return list;
+		}
+
+		for (Object obj : rawSet) {
+			if (obj == null) continue;
+			try {
+				String json = obj.toString();
+				CandleCreationRequest c = objectMapper.readValue(json, CandleCreationRequest.class);
+				list.add(c);
+			} catch (Exception e) {
+				log.error("Error parsing candle json from Redis: {}", e.getMessage(), e);
+			}
+		}
+		list.sort(Comparator.comparingLong(CandleCreationRequest::getOpenTime));
+		return list;
+	}
+
 }
