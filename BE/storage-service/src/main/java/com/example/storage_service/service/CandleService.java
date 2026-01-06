@@ -9,8 +9,12 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @Service
@@ -68,5 +72,36 @@ public class CandleService {
 
 		log.info("Saved & cached {} closed candles for {} {}", candles.size(), symbol, interval);
 	}
+	public List<CandleCreationRequest> getOlderCandles(
+			String symbol,
+			String interval,
+			Long endTime,
+			int limit
+	) {
+		Pageable pageable = PageRequest.of(0, limit);
 
+		List<Candle> descList = candleRepository
+				.findBySymbolAndIntervalAndOpenTimeLessThanOrderByOpenTimeDesc(
+						symbol, interval, endTime, pageable
+				);
+
+		List<CandleCreationRequest> result = new ArrayList<>();
+		for (Candle c : descList) {
+			CandleCreationRequest dto = CandleCreationRequest.builder()
+					.symbol(c.getSymbol())
+					.interval(c.getInterval())
+					.openTime(c.getOpenTime())
+					.closeTime(c.getCloseTime())
+					.open(c.getOpen())
+					.high(c.getHigh())
+					.low(c.getLow())
+					.close(c.getClose())
+					.volume(c.getVolume())
+					.build();
+			result.add(dto);
+		}
+
+		result.sort(Comparator.comparingLong(CandleCreationRequest::getOpenTime));
+		return result;
+	}
 }

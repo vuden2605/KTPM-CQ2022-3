@@ -72,6 +72,23 @@ public class CandleController {
 				.message("Fetched recent candles from Redis successfully")
 				.build();
 	}
+	@GetMapping("/history")
+	public ApiResponse<List<CandleCreationRequest>> getOlderCandles(
+			@RequestParam("symbol") String symbol,
+			@RequestParam("interval") String interval,
+			@RequestParam("endTime") Long endTime,
+			@RequestParam(value = "limit", defaultValue = "1000") int limit
+	) {
+		if (limit <= 0) limit = 1;
+		if (limit > 1000) limit = 1000;
 
+		List<CandleCreationRequest> candles =
+				candleService.getOlderCandles(symbol, interval, endTime, limit);
+
+		return ApiResponse.<List<CandleCreationRequest>>builder()
+				.data(candles)
+				.message("Fetched older candles successfully")
+				.build();
+	}
 
 }
