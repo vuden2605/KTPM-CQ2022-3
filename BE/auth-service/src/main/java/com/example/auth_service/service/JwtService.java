@@ -1,5 +1,7 @@
 package com.example.auth_service.service;
 
+import com.example.auth_service.dto.request.IntrospectRequest;
+import com.example.auth_service.dto.response.IntrospectResponse;
 import com.example.auth_service.entity.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -24,6 +26,8 @@ public class JwtService {
 
 	@Value("${jwt.refresh-time}")
 	private long refreshTime;
+
+	private final TokenCacheService tokenCacheService;
 
 	public SecretKey getSecretKey() {
 		return Keys.hmacShaKeyFor(secretKey.getBytes());
@@ -69,13 +73,22 @@ public class JwtService {
 					.parseClaimsJws(token)
 					.getBody();
 			String tokenId = claims.getId();
-//			if (tokenCacheService.isTokenInvalidated(tokenId)) {
-//				throw new JwtException("Token has been invalidated");
-//			}
+			if (tokenCacheService.isTokenInvalidated(tokenId)) {
+				throw new JwtException("Token has been invalidated");
+			}
 			return claims;
 		}
 		catch (JwtException e) {
 			throw new JwtException("Invalid or expired token",e);
+		}
+	}
+	public IntrospectResponse introspectToken(IntrospectRequest request) {
+		String token = request.getToken();
+		try {
+			verifyToken(token);
+			return IntrospectResponse.builder().isValid(true).build();
+		} catch (JwtException e) {
+			return IntrospectResponse.builder().isValid(false).build();
 		}
 	}
 }
