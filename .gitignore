@@ -34,3 +34,7 @@ build/
 
 ### Environment ###
 **/.env
+
+# Generated files
+**/*.log
+**/*.pid

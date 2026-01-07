@@ -49,7 +49,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       },
       timeScale: {
         timeVisible: true,
-        secondsVisible: false,
+        secondsVisible: true,
         borderColor: '#2b2f3a',
       },
       rightPriceScale: {
@@ -101,40 +101,19 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       }
     };
 
-    // Fetch recent candles directly from Binance REST to seed chart immediately
-    const fetchBinanceHistory = async (sym: string, intervalSec: number, limit = 500) => {
-      try {
-        const interval = secondsToBinanceInterval(intervalSec);
-        // Use local ws-service proxy to avoid CORS issues
-        const url = `http://localhost:8083/proxy/klines?symbol=${encodeURIComponent(sym)}&interval=${interval}&limit=${limit}`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data: any[] = await resp.json();
-        // Each item: [ openTime, open, high, low, close, ... ]
-        const candles: CandlestickData[] = data.map((k) => ({
-          time: Math.floor(k[0] / 1000) as Time,
-          open: +k[1],
-          high: +k[2],
-          low: +k[3],
-          close: +k[4],
-        }));
-        return candles;
-      } catch (e) {
-        console.warn('Binance history fetch failed', e);
-        return null;
-      }
-    };
+    // (Removed unused Binance direct fetch; using storage-service cached endpoint instead)
 
     window.addEventListener('resize', handleResize);
 
+
     // Helper: generate mock historical candles
     const generateMockCandles = (count: number, base = 1000, intervalSec = intervalSeconds) => {
-      // generate candles spaced by `intervalSeconds` to match the WS interval (default 1m)
+      // generate candles with timestamps spaced by intervalSec
       const now = Math.floor(Date.now() / 1000);
       const candles: CandlestickData[] = [];
       let lastClose = base;
       for (let i = count - 1; i >= 0; i--) {
-        const time = now - i * intervalSec; // spaced by intervalSec (seconds)
+        const time = now - i * intervalSec; // time in seconds
         const open = +(lastClose + (Math.random() - 0.5) * base * 0.02).toFixed(2);
         const high = +(Math.max(open, lastClose) + Math.random() * base * 0.01).toFixed(2);
         const low = +(Math.min(open, lastClose) - Math.random() * base * 0.01).toFixed(2);
@@ -145,27 +124,111 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       return candles;
     };
 
-    // seed with mock data so chart shows something immediately (will be replaced by real history if available)
+    // seed with mock data so chart shows something immediately (will be replaced by cached history if available)
     const seed = generateMockCandles(80, 56900, intervalSeconds); // seed spacing matches `intervalSeconds`
     candlestickSeries.setData(seed as any);
 
-    // Try to fetch real historical candles from Binance and replace seed before subscribing
-    if (!useMockOnly) {
-      (async () => {
-        const history = await fetchBinanceHistory(symbol, intervalSeconds, 500);
-        if (history && history.length) {
-          // replace seed contents and update chart
-          seed.length = 0;
-          seed.push(...history);
-          candlestickSeries.setData(seed as any);
-        }
-      })();
-    }
-
-    // Flush buffer to chart to batch updates
-    const MAX_STORE = 500;
+    // Try to fetch cached recent candles from storage-service (Redis cache) and replace seed before subscribing
+    // Buffer limits and helpers: used by history fetch and flush
+    const MAX_STORE = 1000;
     // Max messages buffered before dropping oldest entries
     const MAX_BUFFER = 2000;
+
+    // Helpers: sanitization/dedupe utilities used by history fetch and flush
+    const makeAscendingUnique = (arr: CandlestickData[]) => {
+      // Remove duplicates by keeping the last candle for each timestamp, then sort
+      const map = new Map<number, CandlestickData>();
+      for (const candle of arr) {
+        const t = Number((candle as any).time);
+        map.set(t, candle); // Later entries overwrite earlier ones
+      }
+      const unique = Array.from(map.values());
+      const sorted = unique.sort((a, b) => Number((a as any).time) - Number((b as any).time));
+      return sorted;
+    };
+
+    const validateCandle = (c: CandlestickData) => {
+      const o = Number((c as any).open);
+      const h = Number((c as any).high);
+      const l = Number((c as any).low);
+      const cl = Number((c as any).close);
+      if (![o, h, l, cl].every(Number.isFinite)) return false;
+      if (![o, h, l, cl].every((x) => x > -1e6 && x < 1e9)) return false;
+      if (h < l) return false;
+      return true;
+    };
+
+    const sanitizeAndClamp = (arr: CandlestickData[]) => {
+      const filtered = arr.filter((c) => validateCandle(c));
+      // detect duplicates by time
+      const freq = new Map<number, number>();
+      for (const it of filtered) {
+        const t = Number((it as any).time);
+        freq.set(t, (freq.get(t) || 0) + 1);
+      }
+      const duplicates = filtered.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
+      const cleaned = makeAscendingUnique(filtered);
+      if (cleaned.length > MAX_STORE) cleaned.splice(0, cleaned.length - MAX_STORE);
+      const removedCount = arr.length - cleaned.length;
+      const dupCount = duplicates.length;
+      // only warn if significant removal occurred to avoid noisy logs
+      if (removedCount > 5 || dupCount > 5) {
+        console.info('sanitizeAndClamp removed/merged invalid or duplicate candles', {
+          original: arr.length,
+          kept: cleaned.length,
+          removedCount,
+          dupCount,
+          removedSamples: arr
+            .filter((x) => !filtered.includes(x))
+            .slice(0, 6)
+            .map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
+          duplicateSamples: duplicates.slice(0, 6).map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
+        });
+      }
+      return cleaned;
+    };
+
+    const fetchCachedRecent = async (sym: string, intervalSec: number, limit = 1000) => {
+      try {
+        // storage-service runs on 8082
+        const interval = secondsToBinanceInterval(intervalSec);
+        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&limit=${limit}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const api = await resp.json();
+        // ApiResponse.data is List<CandleCreationRequest> where time is in ms
+        if (!api || !api.data) return null;
+        const data: any[] = api.data;
+        // Keep only one candle per unique timestamp (last occurrence for any realtime updates)
+        const uniqueMap = new Map<number, any>();
+        for (const c of data) {
+          const baseTime = Math.floor(c.openTime / 1000);
+          uniqueMap.set(baseTime, c);
+        }
+
+        const candles: CandlestickData[] = [];
+        for (const [baseTime, c] of uniqueMap.entries()) {
+          candles.push({
+            time: baseTime as Time,
+            open: +c.open,
+            high: +c.high,
+            low: +c.low,
+            close: +c.close,
+          } as CandlestickData);
+        }
+
+        // Sort by time to ensure correct order
+        candles.sort((a, b) => Number((a as any).time) - Number((b as any).time));
+        return candles;
+      } catch (e) {
+        console.warn('Cached recent fetch failed', e);
+        return null;
+      }
+    };
+
+    // Try to fetch cached recent candles and replace seed before subscribing (actual fetch happens after subscription helper is defined)
+
+    // Flush buffer to chart to batch updates
     let isUnmounted = false;
 
     const flush = () => {
@@ -177,36 +240,27 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         return;
       }
 
-      // coerce times to numbers and ensure ordering
+      // Keep times as-is since they already have unique millisecond offsets
       const normalizeTime = (d: CandlestickData) => ({ ...d, time: Number((d as any).time) as Time });
       const normalized = items.map(normalizeTime);
 
       const lastSeedTime = seed.length ? Number((seed[seed.length - 1] as any).time) : -Infinity;
 
-      const hasOlder = normalized.some((it) => Number((it as any).time) <= lastSeedTime);
+      // treat strictly older items as "older"; equal-time items are treated as updates
+      const hasOlder = normalized.some((it) => Number((it as any).time) < lastSeedTime);
 
-      if (hasOlder) {
-        // merge, dedupe by time, sort, and setData once
-        const merged = [...seed, ...normalized];
-        const map = new Map<number, CandlestickData>();
-        for (const it of merged) {
-          map.set(Number((it as any).time), it);
-        }
-        const sorted = Array.from(map.entries()).sort((a, b) => a[0] - b[0]).map(([, v]) => v);
-        // clamp store size
-        if (sorted.length > MAX_STORE) sorted.splice(0, sorted.length - MAX_STORE);
-        seed.length = 0;
-        seed.push(...sorted);
-        candlestickSeries.setData(seed as any);
-      } else if (normalized.length === 1) {
-        // single incoming candle -> update
-        candlestickSeries.update(normalized[0] as any);
-        seed.push(normalized[0]);
-      } else {
-        // multiple items -> append and setData once
+      if (hasOlder || normalized.length > 0) {
+        // Append all new candles without merging, just sort
         seed.push(...normalized);
-        if (seed.length > MAX_STORE) seed.splice(0, seed.length - MAX_STORE);
-        candlestickSeries.setData(seed as any);
+        let out = sanitizeAndClamp(seed);
+        seed.length = 0;
+        seed.push(...out);
+        try {
+          candlestickSeries.setData(seed as any);
+        } catch (e) {
+          console.warn('setData failed, retrying sanitized', e);
+          candlestickSeries.setData(sanitizeAndClamp(seed) as any);
+        }
       }
 
       rafIdRef.current = requestAnimationFrame(flush);
@@ -248,19 +302,35 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     let unsubscribe: (() => void) | null = null;
     const setupSubscription = () => {
       if (useMockOnly) return;
+      // clear any leftover buffered messages when switching symbols
+      incomingBufferRef.current.length = 0;
+      droppedRef.current = 0;
+      messagesInRef.current = 0;
+      frameCountRef.current = 0;
+
+      const expectedSymbol = symbol.toUpperCase();
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
+        // ignore messages that clearly belong to a different symbol
+        if (candle && (candle as any).symbol) {
+          try {
+            if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) return;
+          } catch (e) { }
+        }
+        // otherwise proceed
         // push normalized data into buffer with drop-old policy
         if (incomingBufferRef.current.length >= MAX_BUFFER) {
           incomingBufferRef.current.shift();
           droppedRef.current++;
         }
+        const rawT = Math.floor(Number((candle as any).time));
         const cd: CandlestickData = {
-          time: Math.floor(candle.time) as Time,
+          time: rawT as Time,
           open: candle.open,
           high: candle.high,
           low: candle.low,
           close: candle.close,
         };
+        // Append incoming candle (dedupe happens in flush via sanitizeAndClamp)
         incomingBufferRef.current.push(cd);
         messagesInRef.current++;
       });
@@ -268,9 +338,32 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // Ensure shared WS connection is active
       sharedWs.ensureConnected();
     };
-    // start mock updates if requested; otherwise setup subscription now
-    if (useMockOnly) startMockUpdates();
-    else setupSubscription();
+    // start mock updates if requested; otherwise fetch history then setup subscription
+    if (useMockOnly) {
+      startMockUpdates();
+    } else {
+      (async () => {
+        try {
+          const history = await fetchCachedRecent(symbol, intervalSeconds, 1000);
+          if (history && history.length) {
+            const sanitized = sanitizeAndClamp(history);
+            seed.length = 0;
+            seed.push(...sanitized);
+            try {
+              candlestickSeries.setData(seed as any);
+            } catch (e) {
+              console.error('setData failed for fetched history; dumping times', e, {
+                times: (seed as any).map((s: any) => ({ time: s.time, type: typeof s.time })),
+              });
+              candlestickSeries.setData(sanitizeAndClamp(seed) as any);
+            }
+          }
+        } catch (e) {
+          console.warn('history fetch failed before subscribe', e);
+        }
+        setupSubscription();
+      })();
+    }
 
     // Fallback: if websocket not opened in 700ms, start mock updates
     setTimeout(() => {
@@ -295,6 +388,11 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     return () => {
       // mark unmounted so flush/mock won't run
       isUnmounted = true;
+      // clear any pending buffer and metrics so next mount starts clean
+      try { incomingBufferRef.current.length = 0; } catch (e) { }
+      try { droppedRef.current = 0; } catch (e) { }
+      try { messagesInRef.current = 0; } catch (e) { }
+      try { frameCountRef.current = 0; } catch (e) { }
       window.removeEventListener('resize', handleResize);
       // unsubscribe from shared ws
       try { if (unsubscribe) unsubscribe(); } catch (e) { }
