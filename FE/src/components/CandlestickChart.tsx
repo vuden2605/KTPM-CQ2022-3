@@ -16,7 +16,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
-  const incomingBufferRef = useRef<CandlestickData[]>([]);
+  const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
@@ -247,10 +247,25 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // Flush buffer to chart to batch updates
     let isUnmounted = false;
+    // symbol for this chart instance (captured by this effect)
+    const expectedSymbol = symbol.toUpperCase();
 
     const flush = () => {
       if (isUnmounted) return;
-      const items = incomingBufferRef.current.splice(0);
+      const rawItems = incomingBufferRef.current.splice(0);
+      // Only process items that match the expected symbol for this chart instance
+      const items = rawItems.filter((it) => {
+        try {
+          const s = (it as any).symbol;
+          if (!s) return false;
+          return String(s).toUpperCase() === expectedSymbol;
+        } catch (e) {
+          return false;
+        }
+      });
+      // count dropped cross-symbol items
+      const droppedCount = rawItems.length - items.length;
+      if (droppedCount > 0) droppedRef.current += droppedCount;
       frameCountRef.current++;
       if (items.length === 0) {
         rafIdRef.current = requestAnimationFrame(flush);
@@ -325,18 +340,27 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       messagesInRef.current = 0;
       frameCountRef.current = 0;
 
-      const expectedSymbol = symbol.toUpperCase();
+      // use expectedSymbol declared in outer scope
       // Subscribe to the backend interval that best matches the selected UI interval
       // (backend may support 1m/5m/15m/1h/4h/1d). We compute the backend interval
       // from `intervalSeconds` so subscriptions are made per symbol+interval.
       const backendReq = computeBackendRequest(intervalSeconds, 1);
       const intervalStr = backendReq.interval;
+      // debug: log subscribe
+      try { if ((sharedWs as any).setDebug) console.debug('[CandlestickChart] subscribing', { symbol: expectedSymbol, interval: intervalStr }); } catch (e) { }
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
-        // ignore messages that clearly belong to a different symbol
-        if (candle && (candle as any).symbol) {
-          try {
-            if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) return;
-          } catch (e) { }
+        // Strictly require the payload to include a symbol and match expectedSymbol.
+        if (!candle || !(candle as any).symbol) {
+          try { console.debug('[CandlestickChart] dropping ws message without symbol', candle); } catch (e) { }
+          return;
+        }
+        try {
+          if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) {
+            try { console.debug('[CandlestickChart] dropping ws message for other symbol', { got: (candle as any).symbol, expected: expectedSymbol }); } catch (e) { }
+            return;
+          }
+        } catch (e) {
+          return;
         }
         // otherwise proceed
         // push normalized data into buffer with drop-old policy
@@ -348,12 +372,13 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         // bucket incoming times to the selected interval to ensure aggregation
         // (handles cases where backend may send higher-frequency ticks)
         const bucket = intervalSeconds && intervalSeconds > 1 ? Math.floor(rawT / intervalSeconds) * intervalSeconds : rawT;
-        const cd: CandlestickData = {
+        const cd: CandlestickData & { symbol?: string } = {
           time: bucket as Time,
           open: candle.open,
           high: candle.high,
           low: candle.low,
           close: candle.close,
+          symbol: (candle as any).symbol ?? expectedSymbol,
         };
         // Append incoming candle (dedupe happens in flush via sanitizeAndClamp)
         incomingBufferRef.current.push(cd);
@@ -413,7 +438,12 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       try { frameCountRef.current = 0; } catch (e) { }
       window.removeEventListener('resize', handleResize);
       // unsubscribe from shared ws
-      try { if (unsubscribe) unsubscribe(); } catch (e) { }
+      try {
+        if (unsubscribe) {
+          try { console.debug('[CandlestickChart] unsubscribing', { symbol, intervalSeconds }); } catch (e) { }
+          unsubscribe();
+        }
+      } catch (e) { }
 
       // stop reconnect timers
       if (reconnectTimeoutRef.current) {
