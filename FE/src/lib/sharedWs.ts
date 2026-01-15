@@ -6,7 +6,9 @@ const URL = 'ws://localhost:8083/ws';
 
 class SharedWs {
   private ws: WebSocket | null = null;
+  // listeners keyed by "SYMBOL:INTERVAL" (e.g. "BTCUSDT:1m")
   private listeners: Map<string, Set<Listener>> = new Map();
+  // track subscribed topics sent to backend (same key format)
   private subscribed: Set<string> = new Set();
   private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
@@ -17,8 +19,12 @@ class SharedWs {
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
       // re-subscribe to existing topics
-      for (const s of this.subscribed) {
-        this.sendSubscribe(s);
+      for (const topic of this.subscribed) {
+        // topic stored as SYMBOL:INTERVAL
+        const parts = topic.split(':');
+        const symbol = parts[0];
+        const interval = parts[1] || '1m';
+        this.sendSubscribe(symbol, interval);
       }
     };
     this.ws.onmessage = (ev) => this.handleMessage(ev.data);
@@ -35,35 +41,53 @@ class SharedWs {
     }, delay);
   }
 
-  private sendSubscribe(symbol: string) {
+  private sendSubscribe(symbol: string, interval: string = '1m') {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     try {
-      this.ws.send(JSON.stringify({ type: 'SUBSCRIBE', symbol, interval: '1m' }));
+      this.ws.send(JSON.stringify({ type: 'SUBSCRIBE', symbol, interval }));
     } catch (e) {
       // ignore
     }
   }
 
-  subscribe(symbol: string, cb: Listener) {
-    const set = this.listeners.get(symbol) ?? new Set();
+  subscribe(symbol: string, cb: Listener, interval: string = '1m') {
+    const normalized = String(symbol).toUpperCase();
+    const topic = `${normalized}:${interval}`;
+    const set = this.listeners.get(topic) ?? new Set();
     set.add(cb);
-    this.listeners.set(symbol, set);
-    if (!this.subscribed.has(symbol)) {
-      this.subscribed.add(symbol);
+    this.listeners.set(topic, set);
+    if (!this.subscribed.has(topic)) {
+      this.subscribed.add(topic);
       this.ensureConnected();
-      this.sendSubscribe(symbol);
+      this.sendSubscribe(normalized, interval);
     }
-    return () => this.unsubscribe(symbol, cb);
+    return () => this.unsubscribeTopic(topic, cb);
   }
 
-  unsubscribe(symbol: string, cb: Listener) {
-    const set = this.listeners.get(symbol);
+  // unsubscribe helper for topic key
+  private unsubscribeTopic(topic: string, cb: Listener) {
+    const set = this.listeners.get(topic);
     if (!set) return;
     set.delete(cb);
     if (set.size === 0) {
-      this.listeners.delete(symbol);
-      this.subscribed.delete(symbol);
+      this.listeners.delete(topic);
+      this.subscribed.delete(topic);
       // no unsubscribe message supported by backend; it's fine - server drops when session closed
+    }
+  }
+
+  unsubscribe(symbol: string, cb: Listener) {
+    // backward-compat: remove any listener matching symbol across intervals
+    const normalized = String(symbol).toUpperCase();
+    for (const key of Array.from(this.listeners.keys())) {
+      if (key.startsWith(normalized + ':')) {
+        const set = this.listeners.get(key)!;
+        set.delete(cb);
+        if (set.size === 0) {
+          this.listeners.delete(key);
+          this.subscribed.delete(key);
+        }
+      }
     }
   }
 
@@ -74,6 +98,7 @@ class SharedWs {
       else obj = raw;
       // normalization: try to extract symbol and OHLC
       const symbol = obj.symbol || obj.ticker || obj.s || obj.symbolName;
+      const interval = obj.interval || obj.i || obj.k?.interval || null;
       const time = obj.openTime ? Math.floor(obj.openTime / 1000) : obj.timestamp ? Math.floor(obj.timestamp / 1000) : Math.floor(Date.now() / 1000);
       const c = {
         time,
@@ -82,15 +107,28 @@ class SharedWs {
         low: Number(obj.low),
         close: Number(obj.close),
         symbol,
+        // include interval if present so listeners can inspect
+        ...(interval ? { interval } : {}),
       } as Candle;
-      if (symbol && this.listeners.has(symbol)) {
-        for (const cb of this.listeners.get(symbol) || []) cb(c);
-      } else {
-        // if no symbol key, broadcast to all listeners
-        for (const [, set] of this.listeners) {
-          for (const cb of set) cb(c);
+
+      if (symbol && interval) {
+        const topic = `${String(symbol).toUpperCase()}:${interval}`;
+        if (this.listeners.has(topic)) {
+          for (const cb of this.listeners.get(topic) || []) cb(c);
         }
+        // DO NOT fallback broadcast: only dispatch to exact interval match
+        // This prevents 1m data from being sent to 5m/15m/etc listeners
+        return;
       }
+
+      // If no interval in message, log warning and ignore (backend should always include interval)
+      if (symbol) {
+        console.warn('Received WS message without interval field, ignoring', { symbol, obj });
+        return;
+      }
+
+      // No symbol or interval: ignore
+      console.warn('Received WS message without symbol/interval, ignoring', obj);
     } catch (e) {
       // ignore parse errors
       console.warn('sharedWs parse error', e);

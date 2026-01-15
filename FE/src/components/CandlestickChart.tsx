@@ -16,7 +16,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
-  const websocketOpenedRef = useRef(false);
   const incomingBufferRef = useRef<CandlestickData[]>([]);
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
@@ -77,28 +76,26 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       }
     };
 
-    // Convert seconds to Binance interval string (best-effort)
-    const secondsToBinanceInterval = (sec: number) => {
-      switch (sec) {
-        case 60:
-          return '1m';
-        case 300:
-          return '5m';
-        case 900:
-          return '15m';
-        case 3600:
-          return '1h';
-        case 14400:
-          return '4h';
-        case 86400:
-          return '1d';
-        default:
-          // fallback: choose nearest common interval
-          if (sec % 86400 === 0) return `${sec / 86400}d`;
-          if (sec % 3600 === 0) return `${sec / 3600}h`;
-          if (sec % 60 === 0) return `${sec / 60}m`;
-          return '1m';
+    // Compute backend interval and pageSize. Backend supports granular intervals
+    // (1m,5m,15m,1h,4h,1d). For larger UI intervals (1W,1M,..) request multiple
+    // `1d` candles instead of unsupported '7d' etc.
+    const computeBackendRequest = (sec: number, limit = 1000) => {
+      // direct mappings
+      if (sec === 60) return { interval: '1m', pageSize: limit };
+      if (sec === 300) return { interval: '5m', pageSize: limit };
+      if (sec === 900) return { interval: '15m', pageSize: limit };
+      if (sec === 3600) return { interval: '1h', pageSize: limit };
+      if (sec === 14400) return { interval: '4h', pageSize: limit };
+      if (sec === 86400) return { interval: '1d', pageSize: limit };
+
+      // If it's a multiple of days, request daily candles and set pageSize to number of days
+      if (sec % 86400 === 0) {
+        const days = Math.min(Math.max(1, sec / 86400), limit);
+        return { interval: '1d', pageSize: Math.min(limit, days) };
       }
+
+      // Fallback to 1m
+      return { interval: '1m', pageSize: limit };
     };
 
     // (Removed unused Binance direct fetch; using storage-service cached endpoint instead)
@@ -106,26 +103,10 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     window.addEventListener('resize', handleResize);
 
 
-    // Helper: generate mock historical candles
-    const generateMockCandles = (count: number, base = 1000, intervalSec = intervalSeconds) => {
-      // generate candles with timestamps spaced by intervalSec
-      const now = Math.floor(Date.now() / 1000);
-      const candles: CandlestickData[] = [];
-      let lastClose = base;
-      for (let i = count - 1; i >= 0; i--) {
-        const time = now - i * intervalSec; // time in seconds
-        const open = +(lastClose + (Math.random() - 0.5) * base * 0.02).toFixed(2);
-        const high = +(Math.max(open, lastClose) + Math.random() * base * 0.01).toFixed(2);
-        const low = +(Math.min(open, lastClose) - Math.random() * base * 0.01).toFixed(2);
-        const close = +(low + Math.random() * (high - low)).toFixed(2);
-        candles.push({ time: time as Time, open, high, low, close });
-        lastClose = close;
-      }
-      return candles;
-    };
+    // (mock candle generator removed — chart uses backend + realtime unless `useMockOnly` is enabled)
 
-    // seed with mock data so chart shows something immediately (will be replaced by cached history if available)
-    const seed = generateMockCandles(80, 56900, intervalSeconds); // seed spacing matches `intervalSeconds`
+    // start with empty data; do NOT seed mock candles so UI only shows real backend/realtime data
+    const seed: CandlestickData[] = [];
     candlestickSeries.setData(seed as any);
 
     // Try to fetch cached recent candles from storage-service (Redis cache) and replace seed before subscribing
@@ -136,11 +117,23 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // Helpers: sanitization/dedupe utilities used by history fetch and flush
     const makeAscendingUnique = (arr: CandlestickData[]) => {
-      // Remove duplicates by keeping the last candle for each timestamp, then sort
+      // Aggregate candles with same timestamp: keep first open, max high, min low, last close
       const map = new Map<number, CandlestickData>();
       for (const candle of arr) {
         const t = Number((candle as any).time);
-        map.set(t, candle); // Later entries overwrite earlier ones
+        const existing = map.get(t);
+        if (existing) {
+          // Merge OHLC properly: first open, highest high, lowest low, latest close
+          map.set(t, {
+            time: t as Time,
+            open: existing.open,  // keep first open
+            high: Math.max(existing.high, candle.high),
+            low: Math.min(existing.low, candle.low),
+            close: candle.close,  // use latest close
+          });
+        } else {
+          map.set(t, candle);
+        }
       }
       const unique = Array.from(map.values());
       const sorted = unique.sort((a, b) => Number((a as any).time) - Number((b as any).time));
@@ -160,14 +153,21 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     const sanitizeAndClamp = (arr: CandlestickData[]) => {
       const filtered = arr.filter((c) => validateCandle(c));
+      // FILTER: only keep candles aligned to intervalSeconds (remove off-interval candles)
+      const aligned = intervalSeconds > 1
+        ? filtered.filter((c) => {
+          const t = Number((c as any).time);
+          return t % intervalSeconds === 0;
+        })
+        : filtered;
       // detect duplicates by time
       const freq = new Map<number, number>();
-      for (const it of filtered) {
+      for (const it of aligned) {
         const t = Number((it as any).time);
         freq.set(t, (freq.get(t) || 0) + 1);
       }
-      const duplicates = filtered.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
-      const cleaned = makeAscendingUnique(filtered);
+      const duplicates = aligned.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
+      const cleaned = makeAscendingUnique(aligned);
       if (cleaned.length > MAX_STORE) cleaned.splice(0, cleaned.length - MAX_STORE);
       const removedCount = arr.length - cleaned.length;
       const dupCount = duplicates.length;
@@ -179,7 +179,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           removedCount,
           dupCount,
           removedSamples: arr
-            .filter((x) => !filtered.includes(x))
+            .filter((x) => !aligned.includes(x))
             .slice(0, 6)
             .map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
           duplicateSamples: duplicates.slice(0, 6).map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
@@ -191,8 +191,10 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     const fetchCachedRecent = async (sym: string, intervalSec: number, limit = 1000) => {
       try {
         // storage-service runs on 8082
-        const interval = secondsToBinanceInterval(intervalSec);
-        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${limit}`;
+        const backend = computeBackendRequest(intervalSec, limit);
+        const interval = backend.interval;
+        const pageSize = backend.pageSize ?? limit;
+        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${pageSize}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const api = await resp.json();
@@ -202,14 +204,29 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         // Keep only one candle per unique timestamp (last occurrence for any realtime updates)
         const uniqueMap = new Map<number, any>();
         for (const c of data) {
-          const baseTime = Math.floor(c.openTime / 1000);
+          // tolerate various backend time units (ms, s). Accept fields like openTime.
+          const raw = Number(c.openTime ?? c.open_time ?? c.time ?? 0);
+          if (!Number.isFinite(raw)) continue;
+          let baseTime = Math.floor(raw);
+          // if value looks like milliseconds (>= year 2001 in ms ~ 1000_000_000_000), convert to seconds
+          if (raw > 1e12) baseTime = Math.floor(raw / 1000);
+          // some backends may send microseconds/nanoseconds; coerce large numbers down
+          if (raw > 1e15) baseTime = Math.floor(raw / 1000000);
+          const nowSec = Math.floor(Date.now() / 1000);
+          // guard: ignore obviously wrong timestamps (before 2000 or far future)
+          if (baseTime < 946684800 || baseTime > nowSec + 86400) {
+            console.warn('Suspicious openTime from backend, skipping', { raw, baseTime, symbol });
+            continue;
+          }
           uniqueMap.set(baseTime, c);
         }
 
         const candles: CandlestickData[] = [];
         for (const [baseTime, c] of uniqueMap.entries()) {
+          // bucket historical timestamps to requested interval to ensure alignment
+          const bucket = intervalSec && intervalSec > 1 ? Math.floor(baseTime / intervalSec) * intervalSec : baseTime;
           candles.push({
-            time: baseTime as Time,
+            time: bucket as Time,
             open: +c.open,
             high: +c.high,
             low: +c.low,
@@ -309,6 +326,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       frameCountRef.current = 0;
 
       const expectedSymbol = symbol.toUpperCase();
+      // Backend only publishes 1m realtime, so always subscribe to 1m and bucket locally
+      const intervalStr = '1m';
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
         // ignore messages that clearly belong to a different symbol
         if (candle && (candle as any).symbol) {
@@ -323,8 +342,11 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           droppedRef.current++;
         }
         const rawT = Math.floor(Number((candle as any).time));
+        // bucket incoming times to the selected interval to ensure aggregation
+        // (handles cases where backend may send higher-frequency ticks)
+        const bucket = intervalSeconds && intervalSeconds > 1 ? Math.floor(rawT / intervalSeconds) * intervalSeconds : rawT;
         const cd: CandlestickData = {
-          time: rawT as Time,
+          time: bucket as Time,
           open: candle.open,
           high: candle.high,
           low: candle.low,
@@ -333,9 +355,9 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         // Append incoming candle (dedupe happens in flush via sanitizeAndClamp)
         incomingBufferRef.current.push(cd);
         messagesInRef.current++;
-      });
+      }, intervalStr);
 
-      // Ensure shared WS connection is active
+      // Ensure shared WS connection is active (subscribe to backend-supported interval)
       sharedWs.ensureConnected();
     };
     // start mock updates if requested; otherwise fetch history then setup subscription
@@ -364,13 +386,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         setupSubscription();
       })();
     }
-
-    // Fallback: if websocket not opened in 700ms, start mock updates
-    setTimeout(() => {
-      if (!websocketOpenedRef.current) startMockUpdates();
-    }, 700);
-
-    // no need to keep websocket in state for now
 
     // Metrics update intervals
     const msgInterval = setInterval(() => {
@@ -418,7 +433,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // finally remove chart instance
       try { chart.remove(); } catch (e) { }
     };
-  }, [symbol]);
+  }, [symbol, intervalSeconds, useMockOnly]);
 
   return (
     <div
