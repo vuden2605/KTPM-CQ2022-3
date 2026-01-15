@@ -326,8 +326,11 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       frameCountRef.current = 0;
 
       const expectedSymbol = symbol.toUpperCase();
-      // Backend only publishes 1m realtime, so always subscribe to 1m and bucket locally
-      const intervalStr = '1m';
+      // Subscribe to the backend interval that best matches the selected UI interval
+      // (backend may support 1m/5m/15m/1h/4h/1d). We compute the backend interval
+      // from `intervalSeconds` so subscriptions are made per symbol+interval.
+      const backendReq = computeBackendRequest(intervalSeconds, 1);
+      const intervalStr = backendReq.interval;
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
         // ignore messages that clearly belong to a different symbol
         if (candle && (candle as any).symbol) {
