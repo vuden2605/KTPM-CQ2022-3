@@ -402,17 +402,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // from `intervalSeconds` so subscriptions are made per symbol+interval.
       const backendReq = computeBackendRequest(intervalSeconds, 1);
       const intervalStr = backendReq.interval;
-      // debug: log subscribe
-      try { if ((sharedWs as any).setDebug) console.debug('[CandlestickChart] subscribing', { symbol: expectedSymbol, interval: intervalStr }); } catch (e) { }
+      // subscribe log removed (debug)
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
         // Strictly require the payload to include a symbol and match expectedSymbol.
         if (!candle || !(candle as any).symbol) {
-          try { console.debug('[CandlestickChart] dropping ws message without symbol', candle); } catch (e) { }
           return;
         }
         try {
           if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) {
-            try { console.debug('[CandlestickChart] dropping ws message for other symbol', { got: (candle as any).symbol, expected: expectedSymbol }); } catch (e) { }
             return;
           }
         } catch (e) {
@@ -496,7 +493,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // unsubscribe from shared ws
       try {
         if (unsubscribe) {
-          try { console.debug('[CandlestickChart] unsubscribing', { symbol, intervalSeconds }); } catch (e) { }
           unsubscribe();
         }
       } catch (e) { }
