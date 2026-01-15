@@ -25,6 +25,15 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const [bufferSize, setBufferSize] = useState(0);
   const [dropped, setDropped] = useState(0);
   const [fps, setFps] = useState(0);
+  const [hover, setHover] = useState<{
+    time?: number | null;
+    open?: number | null;
+    high?: number | null;
+    low?: number | null;
+    close?: number | null;
+    vChange?: number | null; // value change (close - prevClose)
+    vPercent?: number | null; // percent change vs prevClose
+  }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
 
   // Metrics refs
   const messagesInRef = useRef(0);
@@ -65,6 +74,49 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     });
 
     chartRef.current = chart;
+
+    // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
+    const onCrosshair = (param: any) => {
+      try {
+        if (!param || !param.time) {
+          setHover({ time: null, open: null, high: null, low: null, close: null });
+          return;
+        }
+        const seriesData = param.seriesData?.get(candlestickSeries as any);
+        if (seriesData && typeof seriesData.open !== 'undefined') {
+          const openN = Number(seriesData.open);
+          const closeN = Number(seriesData.close);
+          // find previous candle in seed (largest time < current)
+          const curTime = (param.time as any).timestamp ?? param.time;
+          let prevClose: number | null = null;
+          for (let i = seed.length - 1; i >= 0; i--) {
+            try {
+              const t = Number((seed[i] as any).time);
+              if (t < curTime) {
+                prevClose = Number((seed[i] as any).close);
+                break;
+              }
+            } catch (e) { /* ignore */ }
+          }
+          const vChange = prevClose !== null && Number.isFinite(prevClose) ? closeN - prevClose : 0;
+          const vPercent = prevClose !== null && Number.isFinite(prevClose) && prevClose !== 0 ? (vChange / prevClose) * 100 : 0;
+          setHover({
+            time: curTime,
+            open: openN,
+            high: Number(seriesData.high),
+            low: Number(seriesData.low),
+            close: closeN,
+            vChange,
+            vPercent,
+          });
+        } else {
+          setHover({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    const unsubCross = (chart as any).subscribeCrosshairMove(onCrosshair);
 
     // Handle resize
     const handleResize = () => {
@@ -225,13 +277,17 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         for (const [baseTime, c] of uniqueMap.entries()) {
           // bucket historical timestamps to requested interval to ensure alignment
           const bucket = intervalSec && intervalSec > 1 ? Math.floor(baseTime / intervalSec) * intervalSec : baseTime;
+          // try to include volume if backend provided it under common keys
+          const volRaw = c.volume ?? c.vol ?? c.v ?? c.quoteVolume ?? c.quote_vol ?? c.qty ?? c.q ?? null;
+          const vol = Number.isFinite(Number(volRaw)) ? Number(volRaw) : undefined;
           candles.push({
             time: bucket as Time,
             open: +c.open,
             high: +c.high,
             low: +c.low,
             close: +c.close,
-          } as CandlestickData);
+            ...(vol !== undefined ? { volume: vol } : {}),
+          } as any);
         }
 
         // Sort by time to ensure correct order
@@ -456,6 +512,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         clearInterval(mockIntervalRef.current as number);
         mockIntervalRef.current = null;
       }
+      try { if (unsubCross) unsubCross(); } catch (e) { }
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
@@ -478,6 +535,20 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       }}
     >
       <MetricsPanel messagesPerSec={messagesPerSec} bufferSize={bufferSize} dropped={dropped} fps={fps} />
+      {/* Hover OHLCV overlay */}
+      <div style={{ position: 'absolute', left: 12, top: 12, zIndex: 40 }}>
+        {hover && hover.time ? (
+          <div style={{ background: 'rgba(20,24,30,0.9)', color: '#d1d4dc', padding: '8px 10px', borderRadius: 6, minWidth: 200, fontSize: 12 }}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>{symbol.toUpperCase()}</div>
+            <div style={{ marginBottom: 6, fontSize: 11 }}>Time: {new Date((hover.time as number) * 1000).toLocaleString()}</div>
+            <div>O: {typeof hover.open === 'number' ? hover.open.toFixed(2) : '-'}</div>
+            <div>H: {typeof hover.high === 'number' ? hover.high.toFixed(2) : '-'}</div>
+            <div>L: {typeof hover.low === 'number' ? hover.low.toFixed(2) : '-'}</div>
+            <div>C: {typeof hover.close === 'number' ? hover.close.toFixed(2) : '-'}</div>
+            <div>V: {typeof (hover as any).vChange === 'number' ? (hover as any).vChange >= 0 ? '+' + (hover as any).vChange.toFixed(2) : (hover as any).vChange.toFixed(2) : '-'} {typeof (hover as any).vPercent === 'number' ? '(' + ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%)' : ''}</div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 };

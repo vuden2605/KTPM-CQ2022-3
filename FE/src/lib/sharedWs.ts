@@ -1,4 +1,4 @@
-type Candle = { time: number; open: number; high: number; low: number; close: number; symbol?: string };
+type Candle = { time: number; open: number; high: number; low: number; close: number; symbol?: string; volume?: number };
 
 type Listener = (c: Candle) => void;
 
@@ -149,6 +149,9 @@ class SharedWs {
         } catch (e) { /* ignore logging errors */ }
       }
       const time = obj.openTime ? Math.floor(obj.openTime / 1000) : obj.timestamp ? Math.floor(obj.timestamp / 1000) : Math.floor(Date.now() / 1000);
+      // try to extract volume from various possible fields
+      const volRaw = obj.volume ?? obj.v ?? obj.q ?? obj.quoteVolume ?? obj.qty ?? obj.quote_qty ?? null;
+      const vol = Number.isFinite(Number(volRaw)) ? Number(volRaw) : undefined;
       const c = {
         time,
         open: Number(obj.open),
@@ -156,6 +159,7 @@ class SharedWs {
         low: Number(obj.low),
         close: Number(obj.close),
         symbol,
+        ...(vol !== undefined ? { volume: vol } : {}),
         // include interval if present so listeners can inspect
         ...(interval ? { interval } : {}),
       } as Candle;
