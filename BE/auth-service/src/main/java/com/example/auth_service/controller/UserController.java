@@ -1,5 +1,6 @@
 package com.example.auth_service.controller;
 
+import com.example.auth_service.dto.request.GoogleUserCreationRequest;
 import com.example.auth_service.dto.request.UserCreationRequest;
 import com.example.auth_service.dto.response.ApiResponse;
 import com.example.auth_service.dto.response.UserResponse;
@@ -17,13 +18,19 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class UserController {
 	private final UserService userService;
+	@PostMapping("/google")
+	public ApiResponse<UserResponse> createUser(@RequestBody GoogleUserCreationRequest request) {
+		return ApiResponse.<UserResponse>builder()
+				.message("User created successfully")
+				.data(userService.createGoogleUser(request))
+				.build();
+	}
 	@PostMapping
-	public ApiResponse<UserResponse> createUser(@RequestBody UserCreationRequest request) {
+	public ApiResponse<UserResponse> createUserRegular(@RequestBody UserCreationRequest request) {
 		return ApiResponse.<UserResponse>builder()
 				.message("User created successfully")
 				.data(userService.createUser(request))
 				.build();
-
 	}
 
 }

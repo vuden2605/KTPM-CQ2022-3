@@ -8,6 +8,20 @@ spring:
       port: 6379
       password: redis123
       timeout: 2000ms
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+
+      retries: 3
+      batch-size: 65536
+      linger-ms: 5
+      buffer-memory: 33554432
+
+      compression-type: lz4
+
 server:
   port: 8081
 
@@ -27,3 +41,6 @@ storage-service:
 logging:
   level:
     com.example.ingest: INFO
+kafka:
+  topics:
+    closed-candles: closed-candles

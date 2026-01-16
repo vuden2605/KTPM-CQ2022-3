@@ -192,7 +192,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       try {
         // storage-service runs on 8082
         const interval = secondsToBinanceInterval(intervalSec);
-        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&limit=${limit}`;
+        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${limit}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const api = await resp.json();

@@ -28,6 +28,16 @@ spring:
         format_sql: true
         jdbc:
           time_zone: UTC
+  kafka:
+    consumer:
+      bootstrap-servers: localhost:9092
+      group-id: storage-candle-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      enable-auto-commit: false
+      max-poll-records: 500
+      auto-offset-reset: earliest
 
   jackson:
     time-zone: UTC
@@ -35,3 +45,13 @@ logging:
   level:
     root: INFO
     com.example.storage_service: INFO
+kafka:
+  topics:
+    closed-candles: closed-candles
+cache:
+  expires:
+    "[recent-candles-1m]": 30s
+    "[recent-candles-2m]": 1m
+    "[recent-candles-5m]": 3m
+    "[recent-candles-15m]": 5m
+    "[recent-candles-1h]": 15m

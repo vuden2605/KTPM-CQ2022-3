@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -33,7 +34,7 @@ services:
     networks:
       - crypto-network
     healthcheck:
-      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,11 +50,10 @@ services:
       MYSQL_USER: crypto_user
       MYSQL_PASSWORD: crypto123
       MYSQL_ROOT_PASSWORD: root123
-    command: [
-      "--default-authentication-plugin=mysql_native_password",
-      "--character-set-server=utf8mb4",
-      "--collation-server=utf8mb4_unicode_ci"
-    ]
+    command:
+      - "--default-authentication-plugin=mysql_native_password"
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_unicode_ci"
     volumes:
       - mysql_data:/var/lib/mysql
     networks:
@@ -64,15 +64,73 @@ services:
       timeout: 5s
       retries: 5
 
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: crypto-zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
+    networks:
+      - crypto-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: crypto-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+
+      # 🔥 LISTENERS (QUAN TRỌNG)
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+
+      # Kafka internal
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_LOG_RETENTION_HOURS: 168
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - crypto-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: crypto-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: crypto-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - crypto-network
+
 volumes:
   postgres_data:
-    driver: local
   redis_data:
-    driver: local
-  pgadmin_data:
-    driver: local
   mysql_data:
-    driver: local
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
 
 networks:
   crypto-network:

@@ -8,7 +8,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.4</version> <!-- chỉnh lại -->
+        <version>3.3.4</version>
         <relativePath/>
     </parent>
 
@@ -23,7 +23,6 @@
         <lombok.version>1.18.34</lombok.version>
     </properties>
 
-    <!-- Spring Cloud BOM cho OpenFeign -->
     <dependencyManagement>
         <dependencies>
             <dependency>
@@ -75,7 +74,11 @@
             <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
-
+        <!-- pom.xml -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

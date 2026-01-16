@@ -4,12 +4,11 @@ import com.example.storage_service.dto.request.CandleBatchRequest;
 import com.example.storage_service.dto.request.CandleCreationRequest;
 import com.example.storage_service.dto.response.ApiResponse;
 import com.example.storage_service.dto.response.CandleResponse;
-import com.example.storage_service.service.CandleCacheService;
+import com.example.storage_service.entity.Candle;
 import com.example.storage_service.service.CandleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.CrossOrigin;
 
@@ -22,7 +21,6 @@ import java.util.List;
 @Slf4j
 public class CandleController {
 	private final CandleService candleService;
-	private final CandleCacheService candleCacheService;
 	@PostMapping
 	public ApiResponse<CandleResponse> createCandle(@RequestBody CandleCreationRequest request) {
 		log.info("Received request to create candle: {}", request);
@@ -30,14 +28,6 @@ public class CandleController {
 		return ApiResponse.<CandleResponse>builder()
 				.data(candleResponse)
 				.message("Candle created successfully")
-				.build();
-	}
-	@PostMapping("/batch")
-	public ApiResponse<Void> saveCandlesBatch(
-			@RequestBody @Valid CandleBatchRequest request) {
-		candleService.saveClosedCandlesBatch(request.getSymbol(), request.getInterval(), request.getCandles());
-		return ApiResponse.<Void>builder()
-				.message("Candles batch saved successfully")
 				.build();
 	}
 	@GetMapping
@@ -58,39 +48,21 @@ public class CandleController {
 				.build();
 	}
 	@GetMapping("/recent")
-	public ApiResponse<List<CandleCreationRequest>> getRecentCandles(
+	public ApiResponse<List<Candle>> getRecentCandles(
 			@RequestParam("symbol") String symbol,
 			@RequestParam("interval") String interval,
-			@RequestParam(value = "limit", defaultValue = "1000") int limit
+			@RequestParam(value = "pageSize", defaultValue = "1000") int pageSize,
+			@RequestParam(value = "page", defaultValue = "0") int page
 	) {
-		if (limit <= 0) limit = 1;
-		if (limit > 1000) limit = 1000;
+		if (pageSize <= 0) pageSize = 1;
+		if (pageSize > 1000) pageSize = 1000;
 
-		List<CandleCreationRequest> candles =
-				candleCacheService.getRecentCandlesFromRedis(symbol, interval, limit);
+		List<Candle> candles =
+				candleService.getRecentCandles(symbol, interval, pageSize, page);
 
-		return ApiResponse.<List<CandleCreationRequest>>builder()
+		return ApiResponse.<List<Candle>>builder()
 				.data(candles)
-				.message("Fetched recent candles from Redis successfully")
+				.message("Fetched recent candles successfully")
 				.build();
 	}
-	@GetMapping("/history")
-	public ApiResponse<List<CandleCreationRequest>> getOlderCandles(
-			@RequestParam("symbol") String symbol,
-			@RequestParam("interval") String interval,
-			@RequestParam("endTime") Long endTime,
-			@RequestParam(value = "limit", defaultValue = "1000") int limit
-	) {
-		if (limit <= 0) limit = 1;
-		if (limit > 1000) limit = 1000;
-
-		List<CandleCreationRequest> candles =
-				candleService.getOlderCandles(symbol, interval, endTime, limit);
-
-		return ApiResponse.<List<CandleCreationRequest>>builder()
-				.data(candles)
-				.message("Fetched older candles successfully")
-				.build();
-	}
-
 }

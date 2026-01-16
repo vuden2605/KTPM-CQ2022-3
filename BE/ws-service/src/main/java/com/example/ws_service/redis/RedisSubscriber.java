@@ -20,6 +20,7 @@ public class RedisSubscriber implements MessageListener {
 	public void onMessage(Message message, byte[] pattern) {
 		String topic = new String(message.getChannel());
 		String payload = new String(message.getBody());
+		log.info("Received Redis message on topic {}: {}", topic, payload);
 		String wsTopic = topic.replace(":realtime", "");
 		wsHandler.forward(wsTopic, payload);
 	}

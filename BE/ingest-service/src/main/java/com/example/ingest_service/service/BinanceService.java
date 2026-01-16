@@ -1,33 +1,37 @@
 package com.example.ingest_service.service;
 
-import com.example.ingest_service.configure.StorageServiceWebClient;
-import com.example.ingest_service.dto.request.Candle;
+import com.example.ingest_service. configure.StorageServiceWebClient;
+import com.example.ingest_service. dto.request. Candle;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import org.springframework.beans.factory.annotation.Value;
+import org. springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind. ObjectMapper;
 
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BinanceService {
 	private final RedisService redisService;
+	private final CandleKafkaProducer kafkaService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private final BinanceRestService binanceRestService;
+	private final StorageServiceWebClient storageServiceClient;
+
 	@Value("${binance.ws.base-url}")
 	private String baseUrl;
-	private final StorageServiceWebClient storageServiceClient;
+
 	private final List<String> symbols = List.of(
 			"BTCUSDT",
 			"ETHUSDT",
@@ -44,17 +48,19 @@ public class BinanceService {
 			"4h",
 			"1d"
 	);
+
 	private String buildStreamUrl() {
 		List<String> streams = new ArrayList<>();
 
 		for (String s : symbols) {
 			for (String i : intervals) {
-				streams.add(s.toLowerCase() + "@kline_" + i);
+				streams.add(s. toLowerCase() + "@kline_" + i);
 			}
 		}
 
 		return baseUrl + "?streams=" + String.join("/", streams);
 	}
+
 	@PostConstruct
 	public void startBinanceWebSocket() {
 		String url = buildStreamUrl();
@@ -62,7 +68,7 @@ public class BinanceService {
 		client.connect();
 		log.info("WebSocket connecting to {}", url);
 
-		CompletableFuture. runAsync(this::backfillOnStart)
+		CompletableFuture.runAsync(this::backfillOnStart)
 				.exceptionally(ex -> {
 					log.error("Backfill failed", ex);
 					return null;
@@ -81,7 +87,6 @@ public class BinanceService {
 					List<Candle> candlesToBackfill = new ArrayList<>();
 
 					if (lastOpenTime == null) {
-
 						int limit = 1000;
 						candlesToBackfill = binanceRestService.fetchLastClosedCandles(
 								symbol, interval, limit
@@ -97,6 +102,7 @@ public class BinanceService {
 									symbol, interval, lastOpenTime, nowOpenTime);
 						} else {
 							int limit = (int) Math.min(missing, 1000);
+							lastOpenTime += (missing - limit) * intervalMs;
 							candlesToBackfill = binanceRestService.fetchClosedCandlesAfter(
 									symbol, interval, lastOpenTime, limit
 							);
@@ -106,18 +112,20 @@ public class BinanceService {
 					}
 
 					if (!candlesToBackfill.isEmpty()) {
-						String baseKey = String.format("candle:%s:%s", symbol, interval);
 						for (Candle c : candlesToBackfill) {
-							String json = objectMapper.writeValueAsString(c);
-							redisService.publishCandle(baseKey + ":closed", json);
+							String candleJson = objectMapper.writeValueAsString(c);
+							kafkaService.publishClosedCandle(symbol, interval, candleJson);
 						}
+						log.info("[Backfill] Published {} closed candles to Kafka:  {} {}",
+								candlesToBackfill.size(), symbol, interval);
 					}
 				} catch (Exception e) {
-					log.error("Error backfilling {} {}: {}", symbol, interval, e.getMessage(), e);
+					log.error("Error backfilling {} {}:  {}", symbol, interval, e. getMessage(), e);
 				}
 			}
 		}
 	}
+
 	private WebSocketClient createClient(String url) {
 		return new WebSocketClient(URI.create(url)) {
 
@@ -136,18 +144,23 @@ public class BinanceService {
 						String stream = node.get("stream").asText();
 						String[] streamParts = stream.split("@");
 						String symbol = streamParts[0].toUpperCase();
-						String interval = streamParts[1].substring(6);
+						String interval = streamParts[1]. substring(6);
 						Candle candle = parseCandle(data, symbol, interval);
 
-						String key = String.format("candle:%s:%s", symbol, interval);
-						String candleJson = objectMapper.writeValueAsString(candle);
-						redisService.publishCandle(key + ":realtime", candleJson);
-						if (candle != null && Boolean.TRUE.equals(candle.getIsClosed())) {
-							redisService.publishCandle(key + ":closed", candleJson);
+						if (candle != null) {
+							String candleJson = objectMapper.writeValueAsString(candle);
+
+							redisService.publishRealtimeCandle(symbol, interval, candleJson);
+
+							if (Boolean.TRUE.equals(candle.getIsClosed())) {
+								kafkaService.publishClosedCandle(symbol, interval, candleJson);
+								log.debug("Published closed candle to Kafka: {} {} at {}",
+										symbol, interval, candle.getOpenTime());
+							}
 						}
 					}
 				} catch (Exception e) {
-					log.error("Error processing message", e);
+					log. error("Error processing message", e);
 				}
 			}
 
@@ -155,6 +168,7 @@ public class BinanceService {
 			public void onClose(int code, String reason, boolean remote) {
 				log.info("WebSocket disconnected: code = {}, reason = {}, remote = {}", code, reason, remote);
 			}
+
 			@Override
 			public void onError(Exception e) {
 				log.error("WebSocket error", e);
@@ -164,7 +178,7 @@ public class BinanceService {
 
 	private Candle parseCandle(JsonNode node, String symbol, String interval) {
 		JsonNode k = node.path("k");
-		if(k.isMissingNode()) return null;
+		if (k.isMissingNode()) return null;
 		return Candle.builder()
 				.symbol(symbol)
 				.interval(interval)
@@ -178,15 +192,16 @@ public class BinanceService {
 				.isClosed(k.path("x").asBoolean(false))
 				.build();
 	}
+
 	private long intervalToMillis(String interval) {
 		return switch (interval) {
-			case "1m"  -> 60_000L;
-			case "5m"  -> 5 * 60_000L;
+			case "1m" -> 60_000L;
+			case "5m" -> 5 * 60_000L;
 			case "15m" -> 15 * 60_000L;
-			case "1h"  -> 60 * 60_000L;
-			case "4h"  -> 4 * 60 * 60_000L;
-			case "1d"  -> 24 * 60 * 60_000L;
-			default    -> throw new IllegalArgumentException("Unsupported interval " + interval);
+			case "1h" -> 60 * 60_000L;
+			case "4h" -> 4 * 60 * 60_000L;
+			case "1d" -> 24 * 60 * 60_000L;
+			default -> throw new IllegalArgumentException("Unsupported interval " + interval);
 		};
 	}
 
