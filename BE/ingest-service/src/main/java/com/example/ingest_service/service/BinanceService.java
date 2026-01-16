@@ -54,7 +54,7 @@ public class BinanceService {
 
 		for (String s : symbols) {
 			for (String i : intervals) {
-				streams. add(s. toLowerCase() + "@kline_" + i);
+				streams.add(s. toLowerCase() + "@kline_" + i);
 			}
 		}
 

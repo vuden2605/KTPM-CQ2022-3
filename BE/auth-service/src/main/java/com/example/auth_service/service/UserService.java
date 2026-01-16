@@ -3,6 +3,7 @@ package com.example.auth_service.service;
 import com.example.auth_service.Exception.AppException;
 import com.example.auth_service.Exception.ErrorCode;
 import com.example.auth_service.Mapper.UserMapper;
+import com.example.auth_service.dto.request.GoogleUserCreationRequest;
 import com.example.auth_service.dto.request.UserCreationRequest;
 import com.example.auth_service.dto.response.UserResponse;
 import com.example.auth_service.entity.User;
@@ -15,11 +16,16 @@ import org.springframework.stereotype.Service;
 public class UserService {
 	private final UserRepository userRepository;
 	private final UserMapper userMapper;
-	public UserResponse createUser(UserCreationRequest request) {
+	public UserResponse createGoogleUser(GoogleUserCreationRequest request) {
 		if(userRepository.existsByUserName(request.getUserName())) {
 			throw new AppException(ErrorCode.USERNAME_ALREADY_EXISTS);
 		}
 		User user = userMapper.toEntity(request);
 		return userMapper.toResponse(userRepository.save(user));
 	}
+	public UserResponse createUser(UserCreationRequest request) {
+		User user = userMapper.toEntity(request);
+		return userMapper.toResponse(userRepository.save(user));
+	}
+
 }
