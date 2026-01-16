@@ -16,8 +16,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
-  const websocketOpenedRef = useRef(false);
-  const incomingBufferRef = useRef<CandlestickData[]>([]);
+  const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
 
@@ -26,6 +25,15 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const [bufferSize, setBufferSize] = useState(0);
   const [dropped, setDropped] = useState(0);
   const [fps, setFps] = useState(0);
+  const [hover, setHover] = useState<{
+    time?: number | null;
+    open?: number | null;
+    high?: number | null;
+    low?: number | null;
+    close?: number | null;
+    vChange?: number | null; // value change (close - prevClose)
+    vPercent?: number | null; // percent change vs prevClose
+  }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
 
   // Metrics refs
   const messagesInRef = useRef(0);
@@ -67,6 +75,49 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     chartRef.current = chart;
 
+    // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
+    const onCrosshair = (param: any) => {
+      try {
+        if (!param || !param.time) {
+          setHover({ time: null, open: null, high: null, low: null, close: null });
+          return;
+        }
+        const seriesData = param.seriesData?.get(candlestickSeries as any);
+        if (seriesData && typeof seriesData.open !== 'undefined') {
+          const openN = Number(seriesData.open);
+          const closeN = Number(seriesData.close);
+          // find previous candle in seed (largest time < current)
+          const curTime = (param.time as any).timestamp ?? param.time;
+          let prevClose: number | null = null;
+          for (let i = seed.length - 1; i >= 0; i--) {
+            try {
+              const t = Number((seed[i] as any).time);
+              if (t < curTime) {
+                prevClose = Number((seed[i] as any).close);
+                break;
+              }
+            } catch (e) { /* ignore */ }
+          }
+          const vChange = prevClose !== null && Number.isFinite(prevClose) ? closeN - prevClose : 0;
+          const vPercent = prevClose !== null && Number.isFinite(prevClose) && prevClose !== 0 ? (vChange / prevClose) * 100 : 0;
+          setHover({
+            time: curTime,
+            open: openN,
+            high: Number(seriesData.high),
+            low: Number(seriesData.low),
+            close: closeN,
+            vChange,
+            vPercent,
+          });
+        } else {
+          setHover({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    const unsubCross = (chart as any).subscribeCrosshairMove(onCrosshair);
+
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
@@ -77,28 +128,26 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       }
     };
 
-    // Convert seconds to Binance interval string (best-effort)
-    const secondsToBinanceInterval = (sec: number) => {
-      switch (sec) {
-        case 60:
-          return '1m';
-        case 300:
-          return '5m';
-        case 900:
-          return '15m';
-        case 3600:
-          return '1h';
-        case 14400:
-          return '4h';
-        case 86400:
-          return '1d';
-        default:
-          // fallback: choose nearest common interval
-          if (sec % 86400 === 0) return `${sec / 86400}d`;
-          if (sec % 3600 === 0) return `${sec / 3600}h`;
-          if (sec % 60 === 0) return `${sec / 60}m`;
-          return '1m';
+    // Compute backend interval and pageSize. Backend supports granular intervals
+    // (1m,5m,15m,1h,4h,1d). For larger UI intervals (1W,1M,..) request multiple
+    // `1d` candles instead of unsupported '7d' etc.
+    const computeBackendRequest = (sec: number, limit = 1000) => {
+      // direct mappings
+      if (sec === 60) return { interval: '1m', pageSize: limit };
+      if (sec === 300) return { interval: '5m', pageSize: limit };
+      if (sec === 900) return { interval: '15m', pageSize: limit };
+      if (sec === 3600) return { interval: '1h', pageSize: limit };
+      if (sec === 14400) return { interval: '4h', pageSize: limit };
+      if (sec === 86400) return { interval: '1d', pageSize: limit };
+
+      // If it's a multiple of days, request daily candles and set pageSize to number of days
+      if (sec % 86400 === 0) {
+        const days = Math.min(Math.max(1, sec / 86400), limit);
+        return { interval: '1d', pageSize: Math.min(limit, days) };
       }
+
+      // Fallback to 1m
+      return { interval: '1m', pageSize: limit };
     };
 
     // (Removed unused Binance direct fetch; using storage-service cached endpoint instead)
@@ -106,26 +155,10 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     window.addEventListener('resize', handleResize);
 
 
-    // Helper: generate mock historical candles
-    const generateMockCandles = (count: number, base = 1000, intervalSec = intervalSeconds) => {
-      // generate candles with timestamps spaced by intervalSec
-      const now = Math.floor(Date.now() / 1000);
-      const candles: CandlestickData[] = [];
-      let lastClose = base;
-      for (let i = count - 1; i >= 0; i--) {
-        const time = now - i * intervalSec; // time in seconds
-        const open = +(lastClose + (Math.random() - 0.5) * base * 0.02).toFixed(2);
-        const high = +(Math.max(open, lastClose) + Math.random() * base * 0.01).toFixed(2);
-        const low = +(Math.min(open, lastClose) - Math.random() * base * 0.01).toFixed(2);
-        const close = +(low + Math.random() * (high - low)).toFixed(2);
-        candles.push({ time: time as Time, open, high, low, close });
-        lastClose = close;
-      }
-      return candles;
-    };
+    // (mock candle generator removed — chart uses backend + realtime unless `useMockOnly` is enabled)
 
-    // seed with mock data so chart shows something immediately (will be replaced by cached history if available)
-    const seed = generateMockCandles(80, 56900, intervalSeconds); // seed spacing matches `intervalSeconds`
+    // start with empty data; do NOT seed mock candles so UI only shows real backend/realtime data
+    const seed: CandlestickData[] = [];
     candlestickSeries.setData(seed as any);
 
     // Try to fetch cached recent candles from storage-service (Redis cache) and replace seed before subscribing
@@ -136,11 +169,23 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // Helpers: sanitization/dedupe utilities used by history fetch and flush
     const makeAscendingUnique = (arr: CandlestickData[]) => {
-      // Remove duplicates by keeping the last candle for each timestamp, then sort
+      // Aggregate candles with same timestamp: keep first open, max high, min low, last close
       const map = new Map<number, CandlestickData>();
       for (const candle of arr) {
         const t = Number((candle as any).time);
-        map.set(t, candle); // Later entries overwrite earlier ones
+        const existing = map.get(t);
+        if (existing) {
+          // Merge OHLC properly: first open, highest high, lowest low, latest close
+          map.set(t, {
+            time: t as Time,
+            open: existing.open,  // keep first open
+            high: Math.max(existing.high, candle.high),
+            low: Math.min(existing.low, candle.low),
+            close: candle.close,  // use latest close
+          });
+        } else {
+          map.set(t, candle);
+        }
       }
       const unique = Array.from(map.values());
       const sorted = unique.sort((a, b) => Number((a as any).time) - Number((b as any).time));
@@ -160,14 +205,21 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     const sanitizeAndClamp = (arr: CandlestickData[]) => {
       const filtered = arr.filter((c) => validateCandle(c));
+      // FILTER: only keep candles aligned to intervalSeconds (remove off-interval candles)
+      const aligned = intervalSeconds > 1
+        ? filtered.filter((c) => {
+          const t = Number((c as any).time);
+          return t % intervalSeconds === 0;
+        })
+        : filtered;
       // detect duplicates by time
       const freq = new Map<number, number>();
-      for (const it of filtered) {
+      for (const it of aligned) {
         const t = Number((it as any).time);
         freq.set(t, (freq.get(t) || 0) + 1);
       }
-      const duplicates = filtered.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
-      const cleaned = makeAscendingUnique(filtered);
+      const duplicates = aligned.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
+      const cleaned = makeAscendingUnique(aligned);
       if (cleaned.length > MAX_STORE) cleaned.splice(0, cleaned.length - MAX_STORE);
       const removedCount = arr.length - cleaned.length;
       const dupCount = duplicates.length;
@@ -179,7 +231,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           removedCount,
           dupCount,
           removedSamples: arr
-            .filter((x) => !filtered.includes(x))
+            .filter((x) => !aligned.includes(x))
             .slice(0, 6)
             .map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
           duplicateSamples: duplicates.slice(0, 6).map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
@@ -191,8 +243,10 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     const fetchCachedRecent = async (sym: string, intervalSec: number, limit = 1000) => {
       try {
         // storage-service runs on 8082
-        const interval = secondsToBinanceInterval(intervalSec);
-        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${limit}`;
+        const backend = computeBackendRequest(intervalSec, limit);
+        const interval = backend.interval;
+        const pageSize = backend.pageSize ?? limit;
+        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${pageSize}`;
         const resp = await fetch(url);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const api = await resp.json();
@@ -202,19 +256,38 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         // Keep only one candle per unique timestamp (last occurrence for any realtime updates)
         const uniqueMap = new Map<number, any>();
         for (const c of data) {
-          const baseTime = Math.floor(c.openTime / 1000);
+          // tolerate various backend time units (ms, s). Accept fields like openTime.
+          const raw = Number(c.openTime ?? c.open_time ?? c.time ?? 0);
+          if (!Number.isFinite(raw)) continue;
+          let baseTime = Math.floor(raw);
+          // if value looks like milliseconds (>= year 2001 in ms ~ 1000_000_000_000), convert to seconds
+          if (raw > 1e12) baseTime = Math.floor(raw / 1000);
+          // some backends may send microseconds/nanoseconds; coerce large numbers down
+          if (raw > 1e15) baseTime = Math.floor(raw / 1000000);
+          const nowSec = Math.floor(Date.now() / 1000);
+          // guard: ignore obviously wrong timestamps (before 2000 or far future)
+          if (baseTime < 946684800 || baseTime > nowSec + 86400) {
+            console.warn('Suspicious openTime from backend, skipping', { raw, baseTime, symbol });
+            continue;
+          }
           uniqueMap.set(baseTime, c);
         }
 
         const candles: CandlestickData[] = [];
         for (const [baseTime, c] of uniqueMap.entries()) {
+          // bucket historical timestamps to requested interval to ensure alignment
+          const bucket = intervalSec && intervalSec > 1 ? Math.floor(baseTime / intervalSec) * intervalSec : baseTime;
+          // try to include volume if backend provided it under common keys
+          const volRaw = c.volume ?? c.vol ?? c.v ?? c.quoteVolume ?? c.quote_vol ?? c.qty ?? c.q ?? null;
+          const vol = Number.isFinite(Number(volRaw)) ? Number(volRaw) : undefined;
           candles.push({
-            time: baseTime as Time,
+            time: bucket as Time,
             open: +c.open,
             high: +c.high,
             low: +c.low,
             close: +c.close,
-          } as CandlestickData);
+            ...(vol !== undefined ? { volume: vol } : {}),
+          } as any);
         }
 
         // Sort by time to ensure correct order
@@ -230,10 +303,25 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // Flush buffer to chart to batch updates
     let isUnmounted = false;
+    // symbol for this chart instance (captured by this effect)
+    const expectedSymbol = symbol.toUpperCase();
 
     const flush = () => {
       if (isUnmounted) return;
-      const items = incomingBufferRef.current.splice(0);
+      const rawItems = incomingBufferRef.current.splice(0);
+      // Only process items that match the expected symbol for this chart instance
+      const items = rawItems.filter((it) => {
+        try {
+          const s = (it as any).symbol;
+          if (!s) return false;
+          return String(s).toUpperCase() === expectedSymbol;
+        } catch (e) {
+          return false;
+        }
+      });
+      // count dropped cross-symbol items
+      const droppedCount = rawItems.length - items.length;
+      if (droppedCount > 0) droppedRef.current += droppedCount;
       frameCountRef.current++;
       if (items.length === 0) {
         rafIdRef.current = requestAnimationFrame(flush);
@@ -308,13 +396,24 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       messagesInRef.current = 0;
       frameCountRef.current = 0;
 
-      const expectedSymbol = symbol.toUpperCase();
+      // use expectedSymbol declared in outer scope
+      // Subscribe to the backend interval that best matches the selected UI interval
+      // (backend may support 1m/5m/15m/1h/4h/1d). We compute the backend interval
+      // from `intervalSeconds` so subscriptions are made per symbol+interval.
+      const backendReq = computeBackendRequest(intervalSeconds, 1);
+      const intervalStr = backendReq.interval;
+      // subscribe log removed (debug)
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
-        // ignore messages that clearly belong to a different symbol
-        if (candle && (candle as any).symbol) {
-          try {
-            if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) return;
-          } catch (e) { }
+        // Strictly require the payload to include a symbol and match expectedSymbol.
+        if (!candle || !(candle as any).symbol) {
+          return;
+        }
+        try {
+          if (String((candle as any).symbol).toUpperCase() !== expectedSymbol) {
+            return;
+          }
+        } catch (e) {
+          return;
         }
         // otherwise proceed
         // push normalized data into buffer with drop-old policy
@@ -323,19 +422,23 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           droppedRef.current++;
         }
         const rawT = Math.floor(Number((candle as any).time));
-        const cd: CandlestickData = {
-          time: rawT as Time,
+        // bucket incoming times to the selected interval to ensure aggregation
+        // (handles cases where backend may send higher-frequency ticks)
+        const bucket = intervalSeconds && intervalSeconds > 1 ? Math.floor(rawT / intervalSeconds) * intervalSeconds : rawT;
+        const cd: CandlestickData & { symbol?: string } = {
+          time: bucket as Time,
           open: candle.open,
           high: candle.high,
           low: candle.low,
           close: candle.close,
+          symbol: (candle as any).symbol ?? expectedSymbol,
         };
         // Append incoming candle (dedupe happens in flush via sanitizeAndClamp)
         incomingBufferRef.current.push(cd);
         messagesInRef.current++;
-      });
+      }, intervalStr);
 
-      // Ensure shared WS connection is active
+      // Ensure shared WS connection is active (subscribe to backend-supported interval)
       sharedWs.ensureConnected();
     };
     // start mock updates if requested; otherwise fetch history then setup subscription
@@ -365,13 +468,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       })();
     }
 
-    // Fallback: if websocket not opened in 700ms, start mock updates
-    setTimeout(() => {
-      if (!websocketOpenedRef.current) startMockUpdates();
-    }, 700);
-
-    // no need to keep websocket in state for now
-
     // Metrics update intervals
     const msgInterval = setInterval(() => {
       setMessagesPerSec(messagesInRef.current);
@@ -395,7 +491,11 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       try { frameCountRef.current = 0; } catch (e) { }
       window.removeEventListener('resize', handleResize);
       // unsubscribe from shared ws
-      try { if (unsubscribe) unsubscribe(); } catch (e) { }
+      try {
+        if (unsubscribe) {
+          unsubscribe();
+        }
+      } catch (e) { }
 
       // stop reconnect timers
       if (reconnectTimeoutRef.current) {
@@ -408,6 +508,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         clearInterval(mockIntervalRef.current as number);
         mockIntervalRef.current = null;
       }
+      try { if (unsubCross) unsubCross(); } catch (e) { }
       if (rafIdRef.current) {
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
@@ -418,7 +519,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // finally remove chart instance
       try { chart.remove(); } catch (e) { }
     };
-  }, [symbol]);
+  }, [symbol, intervalSeconds, useMockOnly]);
 
   return (
     <div
@@ -430,6 +531,20 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       }}
     >
       <MetricsPanel messagesPerSec={messagesPerSec} bufferSize={bufferSize} dropped={dropped} fps={fps} />
+      {/* Hover OHLCV overlay */}
+      <div style={{ position: 'absolute', left: 12, top: 12, zIndex: 40 }}>
+        {hover && hover.time ? (
+          <div style={{ background: 'rgba(20,24,30,0.9)', color: '#d1d4dc', padding: '6px 8px', borderRadius: 6, minWidth: 140, maxWidth: 180, width: 'auto', fontSize: 11, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
+            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>{symbol.toUpperCase()}</div>
+            <div style={{ marginBottom: 6, fontSize: 11 }}>Time: {new Date((hover.time as number) * 1000).toLocaleString()}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>O:</div><div>{typeof hover.open === 'number' ? hover.open.toFixed(2) : '-'}</div></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>H:</div><div>{typeof hover.high === 'number' ? hover.high.toFixed(2) : '-'}</div></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>L:</div><div>{typeof hover.low === 'number' ? hover.low.toFixed(2) : '-'}</div></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>C:</div><div>{typeof hover.close === 'number' ? hover.close.toFixed(2) : '-'}</div></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>V:</div><div>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(2) : '-'} {typeof (hover as any).vPercent === 'number' ? '(' + ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%)' : ''}</div></div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 };
