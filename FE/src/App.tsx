@@ -1,48 +1,36 @@
-import { useState } from 'react';
-import { CandlestickChart } from './components/CandlestickChart';
-import { Watchlist } from './components/Watchlist';
-import './App.css';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { Dashboard } from './pages/Dashboard';
+import { Login } from './pages/Login';
+import { NotFound } from './pages/NotFound';
 
 function App() {
-  const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
-  const [intervalLabel, setIntervalLabel] = useState('1m');
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return localStorage.getItem('accessToken') !== null;
+  };
 
-  const labelToSeconds = (label: string) => {
-    const map: Record<string, number> = {
-      '1m': 60,
-      '5m': 300,
-      '15m': 900,
-      '1h': 3600,
-      '4h': 14400,
-      '1d': 86400,
-    };
-    return map[label] ?? 86400;
+  // Protected route wrapper
+  const ProtectedRoute = ({ children }: { children: ReactNode }) => {
+    return isAuthenticated() ? children : <Navigate to="/login" replace />;
   };
 
   return (
-    <div className="app">
-      <div className="chart-container">
-        <div className="chart-header">
-          <h2>{selectedSymbol}</h2>
-          <div className="chart-controls">
-            {['1m', '5m', '15m', '1h', '4h', '1d'].map((lbl) => (
-              <button
-                key={lbl}
-                className={`interval-btn ${intervalLabel === lbl ? 'active' : ''}`}
-                onClick={() => setIntervalLabel(lbl)}
-              >
-                {lbl.toUpperCase()}
-              </button>
-            ))}
-          </div>
-        </div>
-        <CandlestickChart symbol={selectedSymbol} intervalSeconds={labelToSeconds(intervalLabel)} />
-      </div>
-      <Watchlist
-        onSymbolSelect={setSelectedSymbol}
-        selectedSymbol={selectedSymbol}
-      />
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<NotFound />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

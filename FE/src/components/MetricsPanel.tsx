@@ -1,5 +1,5 @@
 import React from 'react';
-import './MetricsPanel.css';
+import '../styles/MetricsPanel.css';
 
 interface Props {
   messagesPerSec: number;

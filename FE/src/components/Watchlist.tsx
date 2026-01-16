@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import './Watchlist.css';
+import '../styles/Watchlist.css';
 
-interface Symbol {
+interface WatchSymbol {
   code: string;
   name: string;
   price: number;
@@ -17,7 +17,7 @@ interface WatchlistProps {
 
 export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
   // Only show cryptocurrency pairs supported by the backend ingest-service
-  const [symbols] = useState<Symbol[]>([
+  const [symbols] = useState<WatchSymbol[]>([
     { code: 'BTCUSDT', name: 'Bitcoin / USDT', price: 86873.13, change: -612.87, changePercent: -0.70, type: 'crypto' },
     { code: 'ETHUSDT', name: 'Ethereum / USDT', price: 2925.2, change: -37.6, changePercent: -1.27, type: 'crypto' },
     { code: 'BNBUSDT', name: 'BNB / USDT', price: 320.5, change: 2.1, changePercent: 0.66, type: 'crypto' },
@@ -25,8 +25,17 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
     { code: 'ADAUSDT', name: 'ADA / USDT', price: 0.42, change: 0.005, changePercent: 1.20, type: 'crypto' },
   ]);
 
-  const getSymbolIcon = (type: string) => {
-    return '₿';
+  const getSymbolIcon = (t: 'stock' | 'crypto' | 'index') => {
+    switch (t) {
+      case 'crypto':
+        return '₿';
+      case 'stock':
+        return '$';
+      case 'index':
+        return '∑';
+      default:
+        return '•';
+    }
   };
 
   return (

@@ -48,6 +48,19 @@ body {
   gap: 8px;
 }
 
+.logout-btn {
+  background: transparent;
+  border: 1px solid #2b2f3a;
+  color: #d1d4dc;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: #2b2f3a;
+}
+
 .interval-btn {
   background: transparent;
   border: 1px solid #2b2f3a;
