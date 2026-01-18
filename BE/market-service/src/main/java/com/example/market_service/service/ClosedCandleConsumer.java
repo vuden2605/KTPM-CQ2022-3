@@ -11,6 +11,7 @@ import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -71,20 +72,15 @@ public class ClosedCandleConsumer {
 		if (records.isEmpty()) return;
 
 		try {
-			for (ConsumerRecord<String, String> record : records) {
-				Candle candle = objectMapper.readValue(record.value(), Candle.class);
-				candleService.upsertCandle(
-						candle.getSymbol(),
-						candle.getInterval(),
-						candle.getOpenTime(),
-						candle.getCloseTime(),
-						candle.getOpen(),
-						candle.getHigh(),
-						candle.getLow(),
-						candle.getClose(),
-						candle.getVolume()
-				);
-			}
+			List<Candle> candles = records.stream().map(record -> {
+				try {
+					return objectMapper.readValue(record.value(), Candle.class);
+				} catch (Exception e) {
+					log.error("Failed to parse candle JSON: {}", record.value(), e);
+					return null;
+				}
+			}).filter(Objects::nonNull).toList();
+			candleService.batchInsert(candles);
 			ack.acknowledge();
 		} catch (Exception e) {
 			log.error("Failed to consume closed candles", e);

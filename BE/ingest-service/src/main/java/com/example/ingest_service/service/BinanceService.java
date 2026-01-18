@@ -1,25 +1,27 @@
 package com.example.ingest_service.service;
 
-import com.example.ingest_service. configure.StorageServiceWebClient;
+import com.example.ingest_service.configure.StorageServiceWebClient;
 import com.example.ingest_service.configure.TradeProperties;
-import com.example.ingest_service. dto.request. Candle;
+import com.example.ingest_service.dto.request.Candle;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
-import org. springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind. ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @RequiredArgsConstructor
@@ -35,12 +37,30 @@ public class BinanceService {
 	@Value("${binance.ws.base-url}")
 	private String baseUrl;
 
+	@Value("${binance.ws.reconnect.max-attempts:10}")
+	private int maxReconnectAttempts;
+
+	@Value("${binance.ws.reconnect.initial-delay:1000}")
+	private long initialReconnectDelay;
+
+	@Value("${binance.ws.reconnect.max-delay:60000}")
+	private long maxReconnectDelay;
+
+	@Value("${binance.ws.ping-interval:30000}")
+	private long pingInterval;
+
+	private WebSocketClient client;
+	private final AtomicBoolean isRunning = new AtomicBoolean(true);
+	private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+	private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
+	private ScheduledFuture<?> pingTask;
+
 	private String buildStreamUrl() {
 		List<String> streams = new ArrayList<>();
 
 		for (String s : tradeProperties.getSymbols()) {
 			for (String i : tradeProperties.getIntervals()) {
-				streams.add(s. toLowerCase() + "@kline_" + i);
+				streams.add(s.toLowerCase() + "@kline_" + i);
 			}
 		}
 
@@ -50,11 +70,96 @@ public class BinanceService {
 	@PostConstruct
 	public void startBinanceWebSocket() {
 		backfillOnStart();
-		String url = buildStreamUrl();
-		WebSocketClient client = createClient(url);
-		client.connect();
-		log.info("WebSocket connecting to {}", url);
+		connectWebSocket();
+	}
 
+	@PreDestroy
+	public void shutdown() {
+		log.info("Shutting down BinanceService...");
+		isRunning.set(false);
+
+		if (pingTask != null) {
+			pingTask.cancel(true);
+		}
+
+		if (client != null && client.isOpen()) {
+			client.close();
+		}
+
+		scheduler.shutdown();
+		try {
+			if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+				scheduler.shutdownNow();
+			}
+		} catch (InterruptedException e) {
+			scheduler.shutdownNow();
+			Thread.currentThread().interrupt();
+		}
+	}
+
+	private void connectWebSocket() {
+		if (!isRunning.get()) {
+			return;
+		}
+
+		String url = buildStreamUrl();
+
+		try {
+			if (client != null && client.isOpen()) {
+				client.close();
+			}
+
+			client = createClient(url);
+			client.connect();
+			log.info("WebSocket connecting to {}", url);
+
+		} catch (Exception e) {
+			log.error("Error creating WebSocket client", e);
+			scheduleReconnect();
+		}
+	}
+
+	private void scheduleReconnect() {
+		if (!isRunning.get()) {
+			return;
+		}
+
+		int attempts = reconnectAttempts.incrementAndGet();
+
+		if (attempts > maxReconnectAttempts) {
+			log.error("Max reconnect attempts ({}) reached. Stopping reconnection.", maxReconnectAttempts);
+			return;
+		}
+
+		// Exponential backoff: delay = min(initialDelay * 2^(attempts-1), maxDelay)
+		long delay = Math.min(
+				initialReconnectDelay * (long) Math.pow(2, attempts - 1),
+				maxReconnectDelay
+		);
+
+		log.warn("Scheduling reconnect attempt {} in {} ms", attempts, delay);
+
+		scheduler.schedule(() -> {
+			log.info("Attempting reconnect #{}", attempts);
+			connectWebSocket();
+		}, delay, TimeUnit.MILLISECONDS);
+	}
+
+	private void startPingTask() {
+		if (pingTask != null) {
+			pingTask.cancel(true);
+		}
+
+		pingTask = scheduler.scheduleAtFixedRate(() -> {
+			try {
+				if (client != null && client.isOpen()) {
+					client.sendPing();
+					log.debug("Sent ping to Binance WebSocket");
+				}
+			} catch (Exception e) {
+				log.error("Error sending ping", e);
+			}
+		}, pingInterval, pingInterval, TimeUnit.MILLISECONDS);
 	}
 
 	private void backfillOnStart() {
@@ -79,7 +184,6 @@ public class BinanceService {
 		List<Candle> candlesToBackfill;
 
 		if (lastOpenTimeOpt.isEmpty()) {
-
 			candlesToBackfill = binanceRestService.fetchLastClosedCandles(
 					symbol, interval, 1000
 			);
@@ -135,7 +239,9 @@ public class BinanceService {
 
 			@Override
 			public void onOpen(ServerHandshake serverHandshake) {
-				log.info("WebSocket connected to {}", url);
+				log.info("WebSocket connected successfully to {}", url);
+				reconnectAttempts.set(0); // Reset reconnect counter on successful connection
+				startPingTask(); // Start sending periodic pings
 			}
 
 			@Override
@@ -148,7 +254,7 @@ public class BinanceService {
 						String stream = node.get("stream").asText();
 						String[] streamParts = stream.split("@");
 						String symbol = streamParts[0].toUpperCase();
-						String interval = streamParts[1]. substring(6);
+						String interval = streamParts[1].substring(6);
 						Candle candle = parseCandle(data, symbol, interval);
 
 						if (candle != null) {
@@ -164,18 +270,28 @@ public class BinanceService {
 						}
 					}
 				} catch (Exception e) {
-					log. error("Error processing message", e);
+					log.error("Error processing message", e);
 				}
 			}
 
 			@Override
 			public void onClose(int code, String reason, boolean remote) {
-				log.info("WebSocket disconnected: code = {}, reason = {}, remote = {}", code, reason, remote);
+				log.warn("WebSocket disconnected: code={}, reason={}, remote={}",
+						code, reason, remote);
+
+				if (pingTask != null) {
+					pingTask.cancel(true);
+				}
+
+				// Auto reconnect if service is still running
+				if (isRunning.get()) {
+					scheduleReconnect();
+				}
 			}
 
 			@Override
 			public void onError(Exception e) {
-				log.error("WebSocket error", e);
+				log.error("WebSocket error occurred", e);
 			}
 		};
 	}

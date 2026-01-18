@@ -7,6 +7,7 @@ import com.example.market_service.entity.Candle;
 import com.example.market_service.repository.CandleRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -14,6 +15,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -32,6 +34,8 @@ public class CandleService {
 	private final CandleMapper candleMapper;
 	private final RedisTemplate<String, String> redisTemplate;
 	private final ObjectMapper objectMapper;
+	private final JdbcTemplate jdbcTemplate;
+
 	public Long getLastOpenTime(String symbol, String interval) {
 		return candleRepository.findLastOpenTime(symbol, interval);
 	}
@@ -111,4 +115,28 @@ public class CandleService {
 		candles.sort(Comparator.comparingLong(Candle::getOpenTime));
 		return candles;
 	}
+	@Transactional
+	public void batchInsert(List<Candle> candles) {
+		String sql = """
+        INSERT INTO candles
+        (symbol,interval,open_time,close_time,open,high,low,close,volume)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+    """;
+
+		jdbcTemplate.batchUpdate(sql, candles, 500,
+				(ps, c) -> {
+					ps.setString(1, c.getSymbol());
+					ps.setString(2, c.getInterval());
+					ps.setLong(3, c.getOpenTime());
+					ps.setLong(4, c.getCloseTime());
+					ps.setBigDecimal(5, c.getOpen());
+					ps.setBigDecimal(6, c.getHigh());
+					ps.setBigDecimal(7, c.getLow());
+					ps.setBigDecimal(8, c.getClose());
+					ps.setBigDecimal(9, c.getVolume());
+				}
+		);
+	}
+
 }

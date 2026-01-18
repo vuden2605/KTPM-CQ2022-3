@@ -28,6 +28,11 @@ server:
 binance:
   ws:
     base-url: wss://stream.binance.com:9443/stream
+    reconnect:
+      max-attempts: 10           # Số lần thử reconnect tối đa
+      initial-delay: 1000        # Delay ban đầu (ms) - 1 giây
+      max-delay: 60000           # Delay tối đa (ms) - 60 giây
+    ping-interval: 30000
   rest:
     base-url: https://api.binance.com/api/v3
 

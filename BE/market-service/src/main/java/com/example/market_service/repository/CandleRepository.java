@@ -72,4 +72,5 @@ public interface CandleRepository extends JpaRepository<Candle, Long> {
 			@Param("close") BigDecimal close,
 			@Param("volume") BigDecimal volume
 	);
+
 }
