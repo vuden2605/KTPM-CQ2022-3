@@ -118,7 +118,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     };
     const unsubCross = (chart as any).subscribeCrosshairMove(onCrosshair);
 
-    // Handle resize
+    // Handle resize - use ResizeObserver for container size changes (watchlist resize)
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
@@ -127,6 +127,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         });
       }
     };
+
+    // Use ResizeObserver to detect container size changes (when watchlist is resized)
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
 
     // Compute backend interval and pageSize. Backend supports granular intervals
     // (1m,5m,15m,1h,4h,1d). For larger UI intervals (1W,1M,..) request multiple
@@ -493,6 +501,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       try { droppedRef.current = 0; } catch (e) { }
       try { messagesInRef.current = 0; } catch (e) { }
       try { frameCountRef.current = 0; } catch (e) { }
+      // Cleanup resize observer
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       // unsubscribe from shared ws
       try {

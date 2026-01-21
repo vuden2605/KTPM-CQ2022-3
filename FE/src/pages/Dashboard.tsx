@@ -43,30 +43,35 @@ export const Dashboard = () => {
 
   return (
     <div className="app">
-      <div className="chart-container">
-        <div className="chart-header">
-          <h2>{selectedSymbol}</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div className="chart-controls">
-              {['1m', '5m', '15m', '1h', '4h', '1d'].map((lbl) => (
-                <button
-                  key={lbl}
-                  className={`interval-btn ${intervalLabel === lbl ? 'active' : ''}`}
-                  onClick={() => setIntervalLabel(lbl)}
-                >
-                  {lbl.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <button className="logout-btn" onClick={handleLogout}>Đăng xuất</button>
+      {/* Full-width header */}
+      <div className="app-header">
+        <h2>{selectedSymbol}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="chart-controls">
+            {['1m', '5m', '15m', '1h', '4h', '1d'].map((lbl) => (
+              <button
+                key={lbl}
+                className={`interval-btn ${intervalLabel === lbl ? 'active' : ''}`}
+                onClick={() => setIntervalLabel(lbl)}
+              >
+                {lbl.toUpperCase()}
+              </button>
+            ))}
           </div>
+          <button className="logout-btn" onClick={handleLogout}>Đăng xuất</button>
         </div>
-        <CandlestickChart symbol={selectedSymbol} intervalSeconds={labelToSeconds(intervalLabel)} />
       </div>
-      <Watchlist
-        onSymbolSelect={setSelectedSymbol}
-        selectedSymbol={selectedSymbol}
-      />
+
+      {/* Main content area: chart + watchlist */}
+      <div className="app-content">
+        <div className="chart-container">
+          <CandlestickChart symbol={selectedSymbol} intervalSeconds={labelToSeconds(intervalLabel)} />
+        </div>
+        <Watchlist
+          onSymbolSelect={setSelectedSymbol}
+          selectedSymbol={selectedSymbol}
+        />
+      </div>
     </div>
   );
 };
