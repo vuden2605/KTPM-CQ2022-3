@@ -40,7 +40,7 @@ ingest:
   redis-channel-prefix: candles
   max-candles-cache: 500
 
-storage-service:
+market-service:
   base-url: http://localhost:8082/api/v1
 
 logging:
@@ -55,7 +55,6 @@ trades:
     - BTCUSD
     - ETHUSDT
     - BNBUSDT
-    - ADAUSDT
     - XRPUSDT
   intervals:
     - 1m

@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface CandleRepository extends JpaRepository<Candle, Long> {
@@ -78,5 +79,9 @@ public interface CandleRepository extends JpaRepository<Candle, Long> {
 			String interval,
 			long openTime,
 			Pageable pageable
+	);
+	Optional<Candle> findTopBySymbolAndIntervalOrderByOpenTimeDesc(
+			String symbol,
+			String interval
 	);
 }

@@ -21,4 +21,5 @@ public class CandleCreationRequest {
 	private BigDecimal low;
 	private BigDecimal close;
 	private BigDecimal volume;
+	private BigDecimal isClosed;
 }

@@ -13,6 +13,9 @@ public class RedisService {
 	public void publishRealtimeCandle(String symbol, String interval, String candleJson) {
 		String channel = String.format("candle:%s:%s:realtime", symbol, interval);
 		redisTemplate.convertAndSend(channel, candleJson);
-		log.info("Published realtime candle to Redis: {}", channel);
+	}
+	public void publicTicks(String ticksJson) {
+		String channel = "ticks:realtime";
+		redisTemplate.convertAndSend(channel, ticksJson);
 	}
 }

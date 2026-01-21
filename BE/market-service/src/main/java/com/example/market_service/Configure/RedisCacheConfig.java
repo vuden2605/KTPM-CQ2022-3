@@ -45,5 +45,9 @@ public class RedisCacheConfig {
 							customRedisCacheConfiguration.entryTtl(value)));
 		};
 	}
+	@Bean
+	public ObjectMapper objectMapper() {
+		return  new ObjectMapper();
+	}
 
 }

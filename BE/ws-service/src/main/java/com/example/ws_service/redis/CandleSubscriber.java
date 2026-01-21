@@ -1,6 +1,6 @@
 package com.example.ws_service.redis;
 
-import com.example.ws_service.websocket.MarketWebSocketHandler;
+import com.example.ws_service.websocket.CandleWebSocketHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.connection.Message;
 import org.springframework.data.redis.connection.MessageListener;
@@ -8,11 +8,10 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Slf4j
-public class RedisSubscriber implements MessageListener {
+public class CandleSubscriber implements MessageListener {
+	private final CandleWebSocketHandler wsHandler;
 
-	private final MarketWebSocketHandler wsHandler;
-
-	public RedisSubscriber(MarketWebSocketHandler wsHandler) {
+	public CandleSubscriber(CandleWebSocketHandler wsHandler) {
 		this.wsHandler = wsHandler;
 	}
 

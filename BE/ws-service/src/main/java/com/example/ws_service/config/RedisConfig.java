@@ -1,6 +1,8 @@
 package com.example.ws_service.config;
 
-import com.example.ws_service.redis.RedisSubscriber;
+import com.example.ws_service.redis.CandleSubscriber;
+import com.example.ws_service.redis.TickSubscriber;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -13,17 +15,26 @@ public class RedisConfig {
 	@Bean
 	RedisMessageListenerContainer redisContainer(
 			RedisConnectionFactory connectionFactory,
-			RedisSubscriber subscriber
+			CandleSubscriber candleSubscriber,
+			TickSubscriber tickSubscriber
 	) {
 		RedisMessageListenerContainer container =
 				new RedisMessageListenerContainer();
 		container.setConnectionFactory(connectionFactory);
 
 		container.addMessageListener(
-				subscriber,
+				candleSubscriber,
 				new PatternTopic("candle:*:*:realtime")
+		);
+		container.addMessageListener(
+				tickSubscriber,
+				new PatternTopic("ticks:realtime")
 		);
 
 		return container;
+	}
+	@Bean
+	public ObjectMapper objectMapper() {
+		return new ObjectMapper();
 	}
 }

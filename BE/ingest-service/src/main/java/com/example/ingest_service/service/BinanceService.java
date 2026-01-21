@@ -3,6 +3,7 @@ package com.example.ingest_service.service;
 import com.example.ingest_service.configure.StorageServiceWebClient;
 import com.example.ingest_service.configure.TradeProperties;
 import com.example.ingest_service.dto.request.Candle;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +12,7 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import java.math.BigDecimal;
 import java.net.URI;
@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class BinanceService {
 	private final RedisService redisService;
 	private final CandleKafkaProducer kafkaService;
-	private final ObjectMapper objectMapper = new ObjectMapper();
+	private final ObjectMapper objectMapper;
 	private final BinanceRestService binanceRestService;
 	private final StorageServiceWebClient storageServiceClient;
 	private final TradeProperties tradeProperties;
@@ -63,7 +63,6 @@ public class BinanceService {
 				streams.add(s.toLowerCase() + "@kline_" + i);
 			}
 		}
-
 		return baseUrl + "?streams=" + String.join("/", streams);
 	}
 
@@ -131,7 +130,6 @@ public class BinanceService {
 			return;
 		}
 
-		// Exponential backoff: delay = min(initialDelay * 2^(attempts-1), maxDelay)
 		long delay = Math.min(
 				initialReconnectDelay * (long) Math.pow(2, attempts - 1),
 				maxReconnectDelay
@@ -176,62 +174,18 @@ public class BinanceService {
 	}
 
 	private void backfillSymbolInterval(String symbol, String interval) throws Exception {
-		Optional<Long> lastOpenTimeOpt = storageServiceClient.getLastOpenTime(symbol, interval);
-		long intervalMs = intervalToMillis(interval);
-		long now = System.currentTimeMillis();
-		long nowOpenTime = alignToInterval(now, intervalMs);
+		List<Candle> candles = binanceRestService.fetchLastClosedCandles(
+				symbol, interval, 1000
+		);
 
-		List<Candle> candlesToBackfill;
-
-		if (lastOpenTimeOpt.isEmpty()) {
-			candlesToBackfill = binanceRestService.fetchLastClosedCandles(
-					symbol, interval, 1000
-			);
-			log.info("[Backfill] {} {} lần đầu, lấy được {} nến",
-					symbol, interval, candlesToBackfill.size());
-		} else {
-			long lastOpenTime = lastOpenTimeOpt.get();
-			long missingCount = (nowOpenTime - lastOpenTime) / intervalMs;
-
-			log.info("[Backfill] {} {}: lastOpenTime={}, nowOpenTime={}, thiếu={}",
-					symbol, interval, lastOpenTime, nowOpenTime, missingCount);
-
-			if (missingCount <= 0) {
-				log.info("[Backfill] {} {}: không thiếu nến nào", symbol, interval);
-				return;
-			}
-
-			int limit = (int) Math.min(missingCount, 1000);
-			long startTime = nowOpenTime - (limit * intervalMs);
-
-			if (missingCount > 1000) {
-				log.warn("[Backfill] {} {}: thiếu {} nến, chỉ lấy {} nến gần nhất",
-						symbol, interval, missingCount, limit);
-			}
-
-			candlesToBackfill = binanceRestService.fetchClosedCandlesAfter(
-					symbol, interval, startTime, limit
-			);
-			log.info("[Backfill] {} {}: lấy được {} nến",
-					symbol, interval, candlesToBackfill.size());
-		}
-
-		publishCandles(symbol, interval, candlesToBackfill);
-	}
-
-	private void publishCandles(String symbol, String interval, List<Candle> candles)
-			throws Exception {
 		if (candles.isEmpty()) {
 			return;
 		}
 
 		for (Candle candle : candles) {
-			String candleJson = objectMapper.writeValueAsString(candle);
-			kafkaService.publishClosedCandle(symbol, interval, candleJson);
+			String json = objectMapper.writeValueAsString(candle);
+			kafkaService.publishClosedCandle(symbol, interval, json);
 		}
-
-		log.info("[Backfill] Đã publish {} nến lên Kafka: {} {}",
-				candles.size(), symbol, interval);
 	}
 
 	private WebSocketClient createClient(String url) {
@@ -240,15 +194,15 @@ public class BinanceService {
 			@Override
 			public void onOpen(ServerHandshake serverHandshake) {
 				log.info("WebSocket connected successfully to {}", url);
-				reconnectAttempts.set(0); // Reset reconnect counter on successful connection
-				startPingTask(); // Start sending periodic pings
+				reconnectAttempts.set(0);
+				startPingTask();
 			}
 
 			@Override
 			public void onMessage(String message) {
 				try {
-					JsonNode node = objectMapper.readTree(message);
-					JsonNode data = node.get("data");
+					com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(message);
+					com.fasterxml.jackson.databind.JsonNode data = node.get("data");
 
 					if (data != null) {
 						String stream = node.get("stream").asText();
@@ -264,8 +218,6 @@ public class BinanceService {
 
 							if (Boolean.TRUE.equals(candle.getIsClosed())) {
 								kafkaService.publishClosedCandle(symbol, interval, candleJson);
-								log.debug("Published closed candle to Kafka: {} {} at {}",
-										symbol, interval, candle.getOpenTime());
 							}
 						}
 					}
@@ -311,22 +263,5 @@ public class BinanceService {
 				.volume(new BigDecimal(k.path("v").asText("0")))
 				.isClosed(k.path("x").asBoolean(false))
 				.build();
-	}
-
-	private long intervalToMillis(String interval) {
-		return switch (interval) {
-			case "1m" -> 60_000L;
-			case "2m" -> 2 * 60_000L;
-			case "5m" -> 5 * 60_000L;
-			case "15m" -> 15 * 60_000L;
-			case "1h" -> 60 * 60_000L;
-			case "4h" -> 4 * 60 * 60_000L;
-			case "1d" -> 24 * 60 * 60_000L;
-			default -> throw new IllegalArgumentException("Unsupported interval " + interval);
-		};
-	}
-
-	private long alignToInterval(long ts, long intervalMs) {
-		return ts - (ts % intervalMs);
 	}
 }

@@ -16,8 +16,7 @@ import java.util.Optional;
 @Slf4j
 public class StorageServiceWebClient {
 	private final WebClient webClient;
-	@Value("${storage-service.base-url}")
-	private String storageServiceBaseUrl;
+
 	public Optional<Long> getLastOpenTime(String symbol, String interval) {
 
 		ApiResponseLong response = webClient.get()

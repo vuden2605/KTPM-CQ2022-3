@@ -8,9 +8,11 @@ import com.example.market_service.service.CandleService;
 import com.example.market_service.service.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.checkerframework.checker.units.qual.C;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.CrossOrigin;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -66,6 +68,35 @@ public class CandleController {
 		return ApiResponse.<List<Candle>>builder()
 				.data(candles)
 				.message("Fetched candles before specified time successfully")
+				.build();
+	}
+	@GetMapping("/between-times")
+	public ApiResponse<List<Candle>> getCandlesBetweenTimes(
+			@RequestParam("symbol") String symbol,
+			@RequestParam("interval") String interval,
+			@RequestParam("startTime") Long startTime,
+			@RequestParam("endTime") Long endTime
+	) {
+		List<Candle> candles = candleService.getCandlesBetweenOpenTimes(
+				symbol,
+				interval,
+				startTime,
+				endTime
+		);
+		return ApiResponse.<List<Candle>>builder()
+				.data(candles)
+				.message("Fetched candles between specified times successfully")
+				.build();
+	}
+	@GetMapping("/latest-candle")
+	public ApiResponse<Candle> getLatestCandle(
+			@RequestParam("symbol") String symbol,
+			@RequestParam("interval") String interval
+	) {
+
+		return ApiResponse.<Candle>builder()
+				.data(candleService.getLatestPrice(symbol, interval))
+				.message("Fetched latest candle successfully")
 				.build();
 	}
 }

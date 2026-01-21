@@ -1,6 +1,6 @@
 package com.example.ws_service.config;
 
-import com.example.ws_service.websocket.MarketWebSocketHandler;
+import com.example.ws_service.websocket.CandleWebSocketHandler;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
@@ -9,9 +9,9 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
-	private final MarketWebSocketHandler handler;
+	private final CandleWebSocketHandler handler;
 
-	public WebSocketConfig(MarketWebSocketHandler handler) {
+	public WebSocketConfig(CandleWebSocketHandler handler) {
 		this.handler = handler;
 	}
 	@Override

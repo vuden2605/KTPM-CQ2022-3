@@ -70,3 +70,6 @@ jwt:
   refresh-time: 864000000
 google:
   clientId: ${GOOGLE_CLIENT_ID:830106511321-pfkrcmes2fqg4n102aopnjfhefftl7lp.apps.googleusercontent.com}
+binance:
+  rest:
+    base-url: https://api.binance.com/api/v3

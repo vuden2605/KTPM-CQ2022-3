@@ -64,4 +64,5 @@ public class Candle {
 	@UpdateTimestamp
 	@Column(name = "updated_at")
 	private Instant updatedAt;
+	private Boolean isClosed;
 }
