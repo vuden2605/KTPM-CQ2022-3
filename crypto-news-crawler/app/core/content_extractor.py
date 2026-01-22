@@ -102,6 +102,7 @@ def extract_article_from_html(article_html: str, template: Template) -> Optional
     title = None
     content = None
     published_at = None
+    author = None
 
     if template.article_title_selector:
         el = soup.select_one(template.article_title_selector)
@@ -112,6 +113,29 @@ def extract_article_from_html(article_html: str, template: Template) -> Optional
         el = soup.select_one(template.article_content_selector)
         if el:
             content = el.get_text("\n", strip=True)
+
+    # author via selector
+    if getattr(template, "article_author_selector", None):
+        el = soup.select_one(template.article_author_selector)
+        if el:
+            author = el.get_text(strip=True)
+
+    # author via meta fallbacks
+    if not author:
+        for sel in [
+            "meta[name='author']",
+            "meta[property='article:author']",
+            "meta[name='byl']",
+            "[itemprop='author']",
+            "a[rel='author']",
+            ".byline, .byline__name, .article__byline, .author, .author-name",
+        ]:
+            el = soup.select_one(sel)
+            if el:
+                val = el.get("content") if el.name == "meta" else el.get_text(strip=True)
+                if val:
+                    author = val
+                    break
 
     # date via meta selectors
     date_selector = getattr(template, "article_date_selector_meta", None) or getattr(template, "article_date_selector", None)
@@ -162,4 +186,5 @@ def extract_article_from_html(article_html: str, template: Template) -> Optional
         "title": title,
         "content": content,
         "published_at": published_at,
+        "author": author,
     }

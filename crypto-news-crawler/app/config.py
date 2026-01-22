@@ -1,22 +1,19 @@
 import os
 from dotenv import load_dotenv
-from urllib.parse import quote_plus
 
-load_dotenv()
+# Nạp biến môi trường từ .env (Mongo-only)
+load_dotenv(override=True)
 
-DB_SERVER = os.getenv("DB_SERVER", "localhost")
-DB_PORT = os.getenv("DB_PORT", "1433")
-DB_NAME = os.getenv("DB_NAME", "CryptoNews")
-DB_USER = os.getenv("DB_USER", "sa")
-DB_PASS = os.getenv("DB_PASS", "")
-ODBC_DRIVER_NAME = os.getenv("ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
+# Backend mặc định: MongoDB
+DB_BACKEND = os.getenv("DB_BACKEND", "mongo")
 
-odbc_str = (
-    "DRIVER={%s};"
-    "SERVER=%s,%s;"
-    "DATABASE=%s;"
-    "UID=%s;"
-    "PWD=%s;"
-) % (ODBC_DRIVER_NAME, DB_SERVER, DB_PORT, DB_NAME, DB_USER, DB_PASS)
+# Thông số MongoDB
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "cryptonews")
 
-DATABASE_URL = "mssql+pyodbc:///?odbc_connect=" + quote_plus(odbc_str)
+def get_mongo_config():
+    return {
+        "backend": DB_BACKEND,
+        "uri": MONGO_URI,
+        "db_name": MONGO_DB_NAME,
+    }

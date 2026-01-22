@@ -12,9 +12,10 @@ from typing import List, Optional
 from datetime import datetime
 import os
 from pathlib import Path
+from bson import ObjectId
 
-from app.db import SessionLocal
-from app.models import News, NewsSource
+from app.core.storage import db_session
+from app.core.storage import BACKEND as STORAGE_BACKEND
 from app.services.sentiment_analyzer import analyze_news_sentiment, batch_analyze_sentiment
 # TODO: from app.services.binance_service import get_binance_service
 # TODO: from app.services.ai_service import get_ai_service
@@ -103,28 +104,96 @@ def get_news(
     """Fetch latest news articles with sentiment analysis from database.
     
     Query params:
-    - source: Filter by source name (coindesk, cointelegraph, tradingviewnews, ...)
+    - source: Filter by source name (coindesk, cointelegraph, decrypt, reuters, ...)
     - sentiment: Filter by sentiment (positive, negative, neutral)
     - search: Search in title, content, summary
     - limit: Max results (default 10)
     - offset: Pagination offset (default 0)
     """
+    # MongoDB path
+    if STORAGE_BACKEND == "mongo":
+        try:
+            with db_session() as db:
+                filt = {}
+                # Filter by source code (match News.SourceId via NewsSources.Code)
+                if source:
+                    src_docs = list(db.NewsSources.find({"Code": {"$regex": source, "$options": "i"}}))
+                    if src_docs:
+                        src_ids = [str(s["_id"]) for s in src_docs]
+                        filt["SourceId"] = {"$in": src_ids}
+                    else:
+                        return []
+                # Filter by sentiment
+                if sentiment:
+                    filt["SentimentLabel"] = {"$regex": sentiment, "$options": "i"}
+                # Search
+                if search:
+                    regex = {"$regex": search, "$options": "i"}
+                    filt["$or"] = [{"Title": regex}, {"Content": regex}, {"Summary": regex}]
+
+                cursor = db.News.find(filt).sort("PublishedAt", -1).skip(offset).limit(limit)
+                articles = list(cursor)
+
+                # Build source map to avoid N lookups
+                source_ids = list({a.get("SourceId") for a in articles if a.get("SourceId")})
+                src_map = {}
+                if source_ids:
+                    obj_ids = []
+                    for i in source_ids:
+                        try:
+                            obj_ids.append(ObjectId(i))
+                        except Exception:
+                            # Skip non-ObjectId strings
+                            pass
+                    if obj_ids:
+                        src_docs = list(db.NewsSources.find({"_id": {"$in": obj_ids}}))
+                        src_map = {str(s["_id"]): s for s in src_docs}
+
+                news_list = []
+                for a in articles:
+                    src_doc = src_map.get(a.get("SourceId"))
+                    source_name = (src_doc or {}).get("Code", "unknown")
+                    sentiment_score = a.get("SentimentScore")
+                    sentiment_label = a.get("SentimentLabel")
+
+                    # If sentiment missing, compute without updating DB (to keep read-only)
+                    if sentiment_label is None:
+                        sres = analyze_news_sentiment(
+                            title=a.get("Title") or "",
+                            content=a.get("Content") or "",
+                            summary=a.get("Summary") or ""
+                        )
+                        sentiment_score = sres["score"]
+                        sentiment_label = sres["label"]
+
+                    news_list.append({
+                        "id": str(a.get("_id")),
+                        "source": source_name,
+                        "title": a.get("Title") or "",
+                        "content": a.get("Content") or "",
+                        "summary": a.get("Summary") or "",
+                        "published_at": a.get("PublishedAt"),
+                        "url": a.get("Url"),
+                        "language": a.get("Language") or "en",
+                        "author": a.get("Author") or "",
+                        "sentiment_score": sentiment_score or 0.5,
+                        "sentiment_label": sentiment_label or "neutral",
+                    })
+                return news_list
+        except Exception as e:
+            print(f"Error fetching news (mongo): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
+
+    # SQLAlchemy path (legacy)
+    from app.db import SessionLocal
+    from app.models import News, NewsSource
     db = SessionLocal()
     try:
-        # Build query
         query = db.query(News).order_by(News.PublishedAt.desc())
-        
-        # Filter by source if provided
         if source:
-            query = query.join(NewsSource).filter(
-                NewsSource.Code.ilike(f"%{source}%")
-            )
-        
-        # Filter by sentiment if provided
+            query = query.join(NewsSource).filter(NewsSource.Code.ilike(f"%{source}%"))
         if sentiment:
             query = query.filter(News.SentimentLabel.ilike(f"%{sentiment}%"))
-        
-        # Search in title, content, summary
         if search:
             search_term = f"%{search}%"
             query = query.filter(
@@ -132,36 +201,21 @@ def get_news(
                 (News.Content.ilike(search_term)) |
                 (News.Summary.ilike(search_term))
             )
-        
-        # Apply pagination
         articles = query.offset(offset).limit(limit).all()
-        
-        # Convert to dict format
         news_list = []
         for article in articles:
-            # Get source name
             source_name = article.source_ref.Code if article.source_ref else "unknown"
-            
-            # Analyze sentiment if not already done
             if not article.SentimentLabel:
-                sentiment = analyze_news_sentiment(
+                sentiment_res = analyze_news_sentiment(
                     title=article.Title or "",
                     content=article.Content or "",
                     summary=article.Summary or ""
                 )
-                sentiment_score = sentiment["score"]
-                sentiment_label = sentiment["label"]
-                
-                # Update database with sentiment
-                article.SentimentScore = sentiment_score
-                article.SentimentLabel = sentiment_label
+                article.SentimentScore = sentiment_res["score"]
+                article.SentimentLabel = sentiment_res["label"]
                 article.SentimentModel = "VADER"
                 db.commit()
-            else:
-                sentiment_score = article.SentimentScore or 0.5
-                sentiment_label = article.SentimentLabel or "neutral"
-            
-            news_dict = {
+            news_list.append({
                 "id": article.Id,
                 "source": source_name,
                 "title": article.Title or "",
@@ -171,15 +225,12 @@ def get_news(
                 "url": article.Url,
                 "language": article.Language,
                 "author": article.Author or "",
-                "sentiment_score": sentiment_score,
-                "sentiment_label": sentiment_label
-            }
-            news_list.append(news_dict)
-        
+                "sentiment_score": article.SentimentScore or 0.5,
+                "sentiment_label": article.SentimentLabel or "neutral",
+            })
         return news_list
-        
     except Exception as e:
-        print(f"Error fetching news: {str(e)}")
+        print(f"Error fetching news (sql): {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching news: {str(e)}")
     finally:
         db.close()
@@ -192,21 +243,37 @@ def get_news_count(
     search: Optional[str] = None
 ):
     """Get total count of news articles with filters."""
+    if STORAGE_BACKEND == "mongo":
+        try:
+            with db_session() as db:
+                filt = {}
+                if source:
+                    src_docs = list(db.NewsSources.find({"Code": {"$regex": source, "$options": "i"}}))
+                    if src_docs:
+                        src_ids = [str(s["_id"]) for s in src_docs]
+                        filt["SourceId"] = {"$in": src_ids}
+                    else:
+                        return {"total": 0}
+                if sentiment:
+                    filt["SentimentLabel"] = {"$regex": sentiment, "$options": "i"}
+                if search:
+                    regex = {"$regex": search, "$options": "i"}
+                    filt["$or"] = [{"Title": regex}, {"Content": regex}, {"Summary": regex}]
+                total = db.News.count_documents(filt)
+                return {"total": total}
+        except Exception as e:
+            print(f"Error counting news (mongo): {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error counting news: {str(e)}")
+
+    from app.db import SessionLocal
+    from app.models import News, NewsSource
     db = SessionLocal()
     try:
         query = db.query(News)
-        
-        # Filter by source
         if source:
-            query = query.join(NewsSource).filter(
-                NewsSource.Code.ilike(f"%{source}%")
-            )
-        
-        # Filter by sentiment
+            query = query.join(NewsSource).filter(NewsSource.Code.ilike(f"%{source}%"))
         if sentiment:
             query = query.filter(News.SentimentLabel.ilike(f"%{sentiment}%"))
-        
-        # Search in title, content, summary
         if search:
             search_term = f"%{search}%"
             query = query.filter(
@@ -214,12 +281,10 @@ def get_news_count(
                 (News.Content.ilike(search_term)) |
                 (News.Summary.ilike(search_term))
             )
-        
         total = query.count()
         return {"total": total}
-        
     except Exception as e:
-        print(f"Error counting news: {str(e)}")
+        print(f"Error counting news (sql): {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error counting news: {str(e)}")
     finally:
         db.close()

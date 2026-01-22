@@ -3,11 +3,16 @@ beautifulsoup4
 lxml
 trafilatura
 dateparser
-SQLAlchemy
-pyodbc
 python-dotenv
 schedule          # sử dụng cho scheduler đơn giản
 fastapi
 uvicorn
 pydantic
 nltk              # Sentiment analysis (VADER)
+groq
+scrapegraphai
+playwright
+transformers      # FinBERT (financial sentiment)
+torch             # Required for transformers models
+pymongo           # MongoDB backend
+feedparser        # RSS/Atom parsing without manual config

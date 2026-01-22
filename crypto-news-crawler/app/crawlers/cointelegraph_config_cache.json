@@ -1,0 +1,10 @@
+{
+  "list_url": "https://cointelegraph.com/rss",
+  "url_prefix": "https://cointelegraph.com",
+  "article": {
+    "title_selector": "h1.post__title, h1",
+    "content_selector": "div.post-content, div.post__content, article.post",
+    "date_selector_meta": "article:published_time",
+    "author_selector": "a[href*='/author/'], a[href*='/authors/'], meta[name='author']"
+  }
+}

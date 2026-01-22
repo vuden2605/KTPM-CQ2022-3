@@ -1,29 +1,31 @@
-# 🔍 Sentiment Analysis - Cách nhận biết tin tức Tích cực/Tiêu cực
+# 🔍 Sentiment Analysis với FinBERT (tối ưu cho tin tài chính)
 
 ## 📋 Tóm tắt
 
-**Sentiment Analysis** (Phân tích cảm xúc) là kỹ thuật AI để tự động xác định thái độ/cảm xúc trong văn bản.
+**Sentiment Analysis** (Phân tích cảm xúc) giúp xác định thái độ/cảm xúc trong văn bản.
 
-Dự án này sử dụng **VADER** (Valence Aware Dictionary and sEntiment Reasoner) từ thư viện NLTK.
+Trong dự án này, mặc định dùng **FinBERT** (transformers) cho tin tức tài chính/crypto; nếu không khả dụng, sẽ fallback sang **VADER** để tránh gián đoạn.
 
 ---
 
 ## 🎯 Cách hoạt động
 
-### 1️⃣ VADER là gì?
+### 1️⃣ FinBERT là gì?
 
-VADER là một công cụ phân tích cảm xúc được tối ưu hóa cho:
-- ✅ Social media text
-- ✅ Tin tức online
-- ✅ Lời bình luận ngắn
-- ✅ Cryptocurrency news
+FinBERT là mô hình BERT fine-tune cho miền tài chính, cho nhãn: `positive`, `negative`, `neutral`.
+Ưu điểm:
+- ✅ Hiểu ngữ nghĩa tốt hơn với văn bản tin tức tài chính
+- ✅ Nhãn chuyên biệt cho finance/news
+- ✅ Phù hợp crypto/markets
+
+Fallback: khi không thể tải/chạy FinBERT, hệ thống dùng VADER (nhanh, không tốn tài nguyên) để đảm bảo hoạt động.
 
 ### 2️⃣ Quy trình phân tích
 
 ```
 Văn bản đầu vào
     ↓
-VADER Lexicon (từ điển xác định cảm xúc)
+FinBERT (transformers) hoặc VADER (fallback)
     ↓
 Tính toán điểm số (Compound Score: -1 to +1)
     ↓
@@ -34,15 +36,18 @@ Trả về: Score + Label + Confidence
 
 ### 3️⃣ Scoring System
 
-| Compound Score | Label | Emoji | Ý nghĩa |
-|---|---|---|---|
-| ≥ 0.05 | **POSITIVE** | 😊 | Tích cực |
-| ≤ -0.05 | **NEGATIVE** | 😞 | Tiêu cực |
-| -0.05 ~ 0.05 | **NEUTRAL** | 😐 | Trung lập |
+FinBERT:
+- Trả về phân phối xác suất 3 nhãn: `positive`, `negative`, `neutral`.
+- `label`: nhãn có xác suất cao nhất.
+- `confidence`: xác suất của nhãn dự đoán.
+- `compound`: được suy ra từ `positive - negative` (phạm vi -1 → +1).
+- `score`: chuẩn hóa từ compound về 0 → 1: `(compound + 1) / 2`.
+
+VADER (fallback): dùng ngưỡng compound chuẩn (≥ 0.05: positive, ≤ -0.05: negative, else neutral).
 
 ---
 
-## 📊 Ví dụ thực tế
+## 📊 Ví dụ thực tế (FinBERT)
 
 ### ✅ Tin Tích cực (Positive)
 
@@ -51,7 +56,7 @@ Tiêu đề: "Bitcoin Reaches New All-Time High"
 Nội dung: "Bitcoin has surpassed the previous all-time high, reaching new levels 
           of adoption and market interest. Institutions continue buying..."
 
-📈 VADER Score: 0.81 → POSITIVE ✅
+📈 FinBERT: label=positive, confidence≈0.85, score≈0.9 ✅
 ```
 
 **Từ khóa tích cực được phát hiện:**
@@ -69,7 +74,7 @@ Tiêu đề: "Bitcoin Price Crashes Following Negative News"
 Nội dung: "Bitcoin has crashed dramatically following negative regulatory news. 
           Panic selling dominates trading volumes."
 
-📉 VADER Score: 0.05 → NEGATIVE ❌
+📉 FinBERT: label=negative, confidence≈0.78, score≈0.2 ❌
 ```
 
 **Từ khóa tiêu cực được phát hiện:**
@@ -87,7 +92,7 @@ Tiêu đề: "Market Volatility Increases Amid Bearish Pressure"
 Nội dung: "Recent market trends show increased volatility as investors react 
           to macroeconomic factors."
 
-⚪ VADER Score: 0.49 → NEUTRAL ⚪
+⚪ FinBERT: label=neutral, confidence≈0.60, score≈0.5 ⚪
 ```
 
 **Phân tích:**
@@ -99,11 +104,13 @@ Nội dung: "Recent market trends show increased volatility as investors react
 
 ## 🔧 Cài đặt & Sử dụng
 
-### 1. Cài đặt NLTK
+### 1. Cài đặt (FinBERT + fallback VADER)
 
 ```bash
-pip install nltk
+pip install transformers torch nltk
 ```
+
+Lần đầu chạy, transformers sẽ tự tải mô hình `yiyanghkust/finbert-tone`.
 
 ### 2. Sử dụng trong code
 
@@ -118,12 +125,15 @@ result = analyze_news_sentiment(
 )
 
 print(result)
-# Output:
+# Output (FinBERT):
 # {
-#     'score': 0.81,           # 0-1 scale
-#     'label': 'positive',     # positive/negative/neutral
-#     'compound': 0.612,       # VADER raw score (-1 to 1)
-#     'confidence': 0.188
+#     'score': 0.90,            # 0-1 (từ compound chuẩn hóa)
+#     'label': 'positive',      # positive/negative/neutral
+#     'compound': 0.80,         # pos - neg (ước lượng)
+#     'confidence': 0.85,       # xác suất nhãn dự đoán
+#     'positive': 0.85,
+#     'negative': 0.05,
+#     'neutral': 0.10
 # }
 ```
 
@@ -143,21 +153,13 @@ results = batch_analyze_sentiment(news_items)
 
 ---
 
-## 📈 Kết quả test thực tế
+## 🧪 Kiểm thử nhanh
 
+Chạy test nội bộ của service:
+```bash
+python -m app.services.sentiment_analyzer
 ```
-Total News Items: 6
-  ✅ Positive: 4 (66.7%)
-  ❌ Negative: 1 (16.7%)
-  ⚪ Neutral: 1 (16.7%)
-
-📊 Average Sentiment Score: 0.63/1.0
-```
-
-**Giải thích:**
-- 66.7% tin tức tích cực → Thị trường lạc quan
-- 16.7% tin tức tiêu cực → Có lo ngại
-- 16.7% tin tức trung lập → Sự kiện khách quan
+Kết quả sẽ hiển thị nhãn, score, compound, confidence cho một số câu ví dụ.
 
 ---
 
@@ -206,20 +208,19 @@ Result: 0.612 → POSITIVE
 
 ---
 
-## 🔬 So sánh các phương pháp
+## 🔬 So sánh nhanh
 
 | Method | Ưu điểm | Nhược điểm | Chi phí |
 |---|---|---|---|
-| **VADER** (hiện tại) | Nhanh, miễn phí, tối ưu news | Không hiểu ngữ cảnh sâu | $0 |
-| TextBlob | Đơn giản, miễn phí | Độ chính xác thấp | $0 |
-| OpenAI API | Rất chính xác, hiểu ngữ cảnh | Chậm, tốn chi phí | $0.01-0.05/call |
-| AWS Comprehend | Chuyên nghiệp, đa ngôn ngữ | Phức tạp, đắt tiền | $0.0001-0.0002/call |
+| **FinBERT** (mặc định) | Hiểu ngữ cảnh tài chính tốt | Cần tài nguyên, tải model | $0 |
+| VADER (fallback) | Nhanh, nhẹ, miễn phí | Hiểu ngữ cảnh hạn chế | $0 |
+| OpenAI/LLM | Chính xác, ngữ cảnh sâu | Chi phí, latency | $0.01-0.05/call |
 
 ---
 
 ## 🚀 Cải thiện trong tương lai
 
-### 1. Fine-tune cho Crypto
+### 1. Bổ sung lexicon crypto khi fallback VADER
 ```python
 # Thêm crypto-specific words vào VADER lexicon
 custom_lexicon = {
@@ -251,9 +252,9 @@ classifier = pipeline("sentiment-analysis", model="xlm-roberta-base")
 
 ## 📚 Tài liệu
 
-- [VADER: A Parsimonious Rule-based Model](https://github.com/cjhutto/vaderSentiment)
-- [NLTK Sentiment Analysis](https://www.nltk.org/api/nltk.sentiment.html)
-- [Crypto Sentiment Lexicon](https://github.com/cryptonote/sentiment)
+- [FinBERT tone model](https://huggingface.co/yiyanghkust/finbert-tone)
+- [Transformers (HuggingFace)](https://huggingface.co/docs/transformers)
+- [VADER sentiment (fallback)](https://github.com/cjhutto/vaderSentiment)
 
 ---
 
@@ -263,7 +264,7 @@ classifier = pipeline("sentiment-analysis", model="xlm-roberta-base")
 A: Vì từ "Face" có thể được hiểu là tiếp cận (positive). Đây là giới hạn của VADER. Với AI models, sẽ chính xác hơn.
 
 **Q: Độ chính xác của VADER là bao nhiêu?**
-A: ~80-85% cho tiếng Anh. Tốt cho tin tức, kém hơn cho sarcasm hoặc ngôn ngữ phức tạp.
+A: FinBERT thường chính xác hơn VADER với tin tức tài chính; VADER ~80-85% cho tiếng Anh, kém hơn với sarcasm/ngữ nghĩa phức tạp.
 
 **Q: Có cách nào để cải thiện độ chính xác?**
 A: Có! Thêm crypto-specific lexicon hoặc sử dụng transformer models (BERT, etc.)
@@ -272,11 +273,7 @@ A: Có! Thêm crypto-specific lexicon hoặc sử dụng transformer models (BER
 
 ## 🎓 Học thêm
 
-Xem file test: [test_sentiment.py](../test_sentiment.py)
-
-Chạy test:
+Chạy demo tích hợp:
 ```bash
-python test_sentiment.py
+python -m app.services.sentiment_analyzer
 ```
-
-Kết quả sẽ hiển thị chi tiết cách VADER phân tích từng bài báo.

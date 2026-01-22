@@ -1,0 +1,11 @@
+{
+  "list_url": "https://decrypt.co/feed",
+  "list_link_selector": "a[href*='/news']",
+  "url_prefix": "https://decrypt.co",
+  "article": {
+    "title_selector": "h1",
+    "content_selector": "title",
+    "date_selector_meta": "published_time",
+    "author_selector": "a[href*='/author/'], a[href*='/authors/'], meta[name='author']"
+  }
+}

@@ -14,7 +14,21 @@ Dự án này sử dụng 2 servers để development:
 npm install
 ```
 
-### 2. Chạy cả 2 servers
+### 2. Cài đặt Python dependencies (Backend)
+
+```bash
+pip install -r requirements.txt
+```
+
+Yêu cầu tối thiểu cho backend:
+```
+fastapi
+uvicorn
+pydantic
+pymongo
+```
+
+### 3. Chạy cả 2 servers
 
 **Terminal 1 - Backend (FastAPI):**
 ```bash
@@ -32,7 +46,7 @@ npm run dev
 
 ### Development Mode (có hot reload)
 
-1. Start backend: `python run_server.py`
+1. Start backend: `python run_server.py` (API dùng MongoDB qua `app/core/storage.py`)
 2. Start frontend: `npm run dev`
 3. Mở browser: http://localhost:5173
 4. Sửa code trong `app/templates/`, `app/static/`
@@ -82,6 +96,18 @@ Vite đã được cấu hình để:
 - ✅ Hot Module Replacement (HMR)
 - ✅ Auto open browser
 
+Ví dụ proxy (vite.config.js):
+```js
+server: {
+  proxy: {
+    '/api': {
+      target: 'http://localhost:8000',
+      changeOrigin: true,
+    }
+  }
+}
+```
+
 ## 📝 NPM Scripts
 
 ```bash
@@ -102,7 +128,8 @@ server: {
 
 ### API calls không hoạt động
 - Đảm bảo FastAPI server đang chạy trên port 8000
-- Check console để xem lỗi
+- Kiểm tra console của browser và terminal để xem lỗi
+- Kiểm tra kết nối MongoDB (biến `.env`: `MONGO_URI`, `MONGO_DB_NAME`)
 
 ### Hot reload không hoạt động
 - Hard refresh: Ctrl+Shift+R (Windows) hoặc Cmd+Shift+R (Mac)

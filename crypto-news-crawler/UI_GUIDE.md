@@ -21,12 +21,12 @@ Giao diện CryptoNews là một ứng dụng web hiện đại được xây d�
 pip install -r requirements.txt
 ```
 
-Đảm bảo rằng `requirements.txt` chứa:
+Đảm bảo `requirements.txt` có các gói tối thiểu cho UI/API:
 ```
 fastapi
 uvicorn
-sqlalchemy
 pydantic
+pymongo
 ```
 
 ### 2. Chạy server
@@ -161,29 +161,42 @@ Chỉnh sửa file `app/templates/index.html` và thêm option vào select:
 
 ## 🔌 Kết nối cơ sở dữ liệu
 
-Hiện tại, giao diện sử dụng dữ liệu mock. Để kết nối cơ sở dữ liệu thực:
+Giao diện dùng MongoDB. Để kết nối dữ liệu thực:
 
-1. Bỏ comment các dòng `TODO` trong `app/api/main_api.py`
-2. Triển khai các query database
-3. Import `SessionLocal` từ `app.db`
-4. Query từ model `News`
+1. Bỏ comment các dòng `TODO` trong [app/api/main_api.py](app/api/main_api.py)
+2. Sử dụng `db_session()` từ [app/core/storage.py](app/core/storage.py) (mặc định backend là Mongo)
+3. Query từ collection `News`
 
-**Ví dụ:**
+**Ví dụ (Mongo/PyMongo):**
 ```python
-from app.db import SessionLocal
-from app.models import News
+from typing import Optional, List
+from fastapi import FastAPI
+from app.core.storage import db_session
 
-@app.get("/api/news", response_model=List[NewsItemSchema])
+app = FastAPI()
+
+@app.get("/api/news")
 def get_news(source: Optional[str] = None, limit: int = 10, offset: int = 0):
-    db = SessionLocal()
-    query = db.query(News)
-    
+  with db_session() as db:
+    q = {}
     if source:
-        query = query.filter(News.source.ilike(f"%{source}%"))
-    
-    articles = query.order_by(News.PublishedAt.desc()).offset(offset).limit(limit).all()
-    db.close()
-    return articles
+      q["SourceCode"] = source  # hoặc lọc theo SourceId tùy dữ liệu lưu
+    cursor = db.News.find(q).sort("PublishedAt", -1).skip(offset).limit(limit)
+    items = []
+    for doc in cursor:
+      items.append({
+        "id": str(doc.get("_id")),
+        "source": doc.get("SourceCode"),
+        "title": doc.get("Title"),
+        "content": doc.get("Content"),
+        "summary": doc.get("Summary"),
+        "published_at": doc.get("PublishedAt"),
+        "url": doc.get("Url"),
+        "language": doc.get("Language"),
+        "sentiment_score": doc.get("SentimentScore"),
+        "sentiment_label": doc.get("SentimentLabel"),
+      })
+    return items
 ```
 
 ## 🛠️ Troubleshooting
@@ -209,7 +222,7 @@ pip install -r requirements.txt
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Bootstrap 5](https://getbootstrap.com/)
-- [SQLAlchemy ORM](https://docs.sqlalchemy.org/)
+- [MongoDB PyMongo](https://pymongo.readthedocs.io/en/stable/)
 
 ## 📝 License
 
