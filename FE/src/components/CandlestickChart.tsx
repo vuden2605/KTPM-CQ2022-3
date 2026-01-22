@@ -73,6 +73,31 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       wickDownColor: '#ef5350',
     });
 
+    // Add volume histogram series at the bottom
+    const volumeSeries = (chart as any).addHistogramSeries({
+      color: '#26a69a',
+      priceFormat: {
+        type: 'volume',
+      },
+      priceScaleId: '', // overlay on same pane
+    });
+
+    // Set volume series to bottom 20% of chart
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.8, // highest point at 80% from top
+        bottom: 0,
+      },
+    });
+
+    // Set candlestick to top 80% of chart
+    candlestickSeries.priceScale().applyOptions({
+      scaleMargins: {
+        top: 0.05,
+        bottom: 0.25, // leave room for volume
+      },
+    });
+
     chartRef.current = chart;
 
     // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
@@ -118,7 +143,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     };
     const unsubCross = (chart as any).subscribeCrosshairMove(onCrosshair);
 
-    // Handle resize
+    // Handle resize - use ResizeObserver for container size changes (watchlist resize)
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
         chartRef.current.applyOptions({
@@ -127,6 +152,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         });
       }
     };
+
+    // Use ResizeObserver to detect container size changes (when watchlist is resized)
+    const resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
 
     // Compute backend interval and pageSize. Backend supports granular intervals
     // (1m,5m,15m,1h,4h,1d). For larger UI intervals (1W,1M,..) request multiple
@@ -159,7 +192,9 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // start with empty data; do NOT seed mock candles so UI only shows real backend/realtime data
     const seed: CandlestickData[] = [];
+    const volumeSeed: { time: any; value: number; color: string }[] = [];
     candlestickSeries.setData(seed as any);
+    volumeSeries.setData(volumeSeed as any);
 
     // Try to fetch cached recent candles from storage-service (Redis cache) and replace seed before subscribing
     // Buffer limits and helpers: used by history fetch and flush
@@ -246,8 +281,12 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         const backend = computeBackendRequest(intervalSec, limit);
         const interval = backend.interval;
         const pageSize = backend.pageSize ?? limit;
-        const url = `http://localhost:8082/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${pageSize}`;
-        const resp = await fetch(url);
+        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:8082';
+        const url = `${API_BASE}/api/v1/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${pageSize}`;
+        const token = localStorage.getItem('accessToken');
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const resp = await fetch(url, { headers });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const api = await resp.json();
         // ApiResponse.data is List<CandleCreationRequest> where time is in ms
@@ -345,6 +384,13 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         seed.push(...out);
         try {
           candlestickSeries.setData(seed as any);
+          // Update volume histogram with colors matching candle direction
+          const volumeData = seed.map((c: any) => ({
+            time: c.time,
+            value: c.volume || 0,
+            color: c.close >= c.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)',
+          }));
+          volumeSeries.setData(volumeData);
         } catch (e) {
           console.warn('setData failed, retrying sanitized', e);
           candlestickSeries.setData(sanitizeAndClamp(seed) as any);
@@ -489,6 +535,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       try { droppedRef.current = 0; } catch (e) { }
       try { messagesInRef.current = 0; } catch (e) { }
       try { frameCountRef.current = 0; } catch (e) { }
+      // Cleanup resize observer
+      resizeObserver.disconnect();
       window.removeEventListener('resize', handleResize);
       // unsubscribe from shared ws
       try {

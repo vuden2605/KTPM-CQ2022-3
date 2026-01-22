@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { sharedWs } from '../lib/sharedWs';
 import '../styles/Watchlist.css';
 
 interface WatchSymbol {
@@ -7,6 +8,8 @@ interface WatchSymbol {
   price: number;
   change: number;
   changePercent: number;
+  volume?: number;
+  openPrice?: number;
   type: 'stock' | 'crypto' | 'index';
 }
 
@@ -15,35 +18,301 @@ interface WatchlistProps {
   selectedSymbol: string;
 }
 
-export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
-  // Only show cryptocurrency pairs supported by the backend ingest-service
-  const [symbols] = useState<WatchSymbol[]>([
-    { code: 'BTCUSDT', name: 'Bitcoin / USDT', price: 86873.13, change: -612.87, changePercent: -0.70, type: 'crypto' },
-    { code: 'ETHUSDT', name: 'Ethereum / USDT', price: 2925.2, change: -37.6, changePercent: -1.27, type: 'crypto' },
-    { code: 'BNBUSDT', name: 'BNB / USDT', price: 320.5, change: 2.1, changePercent: 0.66, type: 'crypto' },
-    { code: 'XRPUSDT', name: 'XRP / USDT', price: 0.62, change: -0.01, changePercent: -1.59, type: 'crypto' },
-    { code: 'ADAUSDT', name: 'ADA / USDT', price: 0.42, change: 0.005, changePercent: 1.20, type: 'crypto' },
-  ]);
+interface ViewSettings {
+  tableView: boolean;
+  columns: {
+    price: boolean;
+    change: boolean;
+    changePercent: boolean;
+    volume: boolean;
+  };
+  symbolDisplay: {
+    logo: boolean;
+    ticker: boolean;
+    description: boolean;
+  };
+}
 
-  const getSymbolIcon = (t: 'stock' | 'crypto' | 'index') => {
-    switch (t) {
-      case 'crypto':
-        return '₿';
-      case 'stock':
-        return '$';
-      case 'index':
-        return '∑';
-      default:
-        return '•';
+const DEFAULT_VIEW_SETTINGS: ViewSettings = {
+  tableView: true,
+  columns: {
+    price: true,
+    change: true,
+    changePercent: true,
+    volume: true,
+  },
+  symbolDisplay: {
+    logo: true,
+    ticker: true,
+    description: true,
+  },
+};
+
+const INITIAL_SYMBOLS: WatchSymbol[] = [
+  { code: 'BTCUSDT', name: 'Bitcoin / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
+  { code: 'BTCUSD', name: 'Bitcoin / USD', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
+  { code: 'ETHUSDT', name: 'Ethereum / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
+  { code: 'BNBUSDT', name: 'BNB / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
+  { code: 'XRPUSDT', name: 'XRP / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
+];
+
+export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
+  const [symbols, setSymbols] = useState<WatchSymbol[]>(INITIAL_SYMBOLS);
+  const [width, setWidth] = useState(() => {
+    const saved = localStorage.getItem('watchlistWidth');
+    return saved ? parseInt(saved, 10) : 350;
+  });
+  const [viewSettings, setViewSettings] = useState<ViewSettings>(() => {
+    const saved = localStorage.getItem('watchlistViewSettings');
+    return saved ? JSON.parse(saved) : DEFAULT_VIEW_SETTINGS;
+  });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const openPricesRef = useRef<Record<string, number>>({});
+
+  // Save width to localStorage
+  useEffect(() => {
+    localStorage.setItem('watchlistWidth', width.toString());
+  }, [width]);
+
+  // Save view settings to localStorage
+  useEffect(() => {
+    localStorage.setItem('watchlistViewSettings', JSON.stringify(viewSettings));
+  }, [viewSettings]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
     }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  // Subscribe to WebSocket for real-time price updates
+  useEffect(() => {
+    const handlers: Record<string, (c: any) => void> = {};
+
+    symbols.forEach((sym) => {
+      handlers[sym.code] = (candle: any) => {
+        const closePrice = Number(candle.close);
+        const openPrice = Number(candle.open);
+        const volume = Number(candle.volume) || 0;
+
+        // Store open price for change calculation
+        if (!openPricesRef.current[sym.code] || candle.time !== undefined) {
+          openPricesRef.current[sym.code] = openPrice;
+        }
+
+        const storedOpen = openPricesRef.current[sym.code] || openPrice;
+        const change = closePrice - storedOpen;
+        const changePercent = storedOpen > 0 ? (change / storedOpen) * 100 : 0;
+
+        setSymbols((prev) =>
+          prev.map((s) =>
+            s.code === sym.code
+              ? {
+                ...s,
+                price: closePrice,
+                change,
+                changePercent,
+                volume,
+                openPrice: storedOpen,
+              }
+              : s
+          )
+        );
+      };
+
+      sharedWs.subscribe(sym.code, handlers[sym.code], '1m');
+    });
+
+    return () => {
+      Object.entries(handlers).forEach(([code, handler]) => {
+        sharedWs.unsubscribe(code, handler);
+      });
+    };
+  }, []); // Only run once on mount
+
+  // Resize functionality
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startWidth = width;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = startX - moveEvent.clientX;
+      const newWidth = Math.min(Math.max(startWidth + deltaX, 250), 500);
+      setWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [width]);
+
+  const getSymbolIcon = (code: string) => {
+    const iconMap: Record<string, string> = {
+      'BTCUSDT': '₿',
+      'BTCUSD': '₿',
+      'ETHUSDT': 'Ξ',
+      'BNBUSDT': '◈',
+      'XRPUSDT': '✕',
+    };
+    return iconMap[code] || '₿';
   };
 
+  const formatPrice = (price: number, code: string) => {
+    if (price === 0) return '—';
+    if (code.includes('XRP') || price < 1) {
+      return price.toFixed(4);
+    }
+    return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const formatVolume = (volume: number | undefined) => {
+    if (!volume || volume === 0) return '—';
+    if (volume >= 1e9) return (volume / 1e9).toFixed(2) + 'B';
+    if (volume >= 1e6) return (volume / 1e6).toFixed(2) + 'M';
+    if (volume >= 1e3) return (volume / 1e3).toFixed(2) + 'K';
+    return volume.toFixed(2);
+  };
+
+  const toggleViewSetting = (category: keyof ViewSettings, key?: string) => {
+    setViewSettings((prev) => {
+      if (key && category !== 'tableView') {
+        return {
+          ...prev,
+          [category]: {
+            ...(prev[category] as object),
+            [key]: !(prev[category] as any)[key],
+          },
+        };
+      }
+      if (category === 'tableView') {
+        return { ...prev, tableView: !prev.tableView };
+      }
+      return prev;
+    });
+  };
+
+  const selectedSymbolData = symbols.find((s) => s.code === selectedSymbol);
+
   return (
-    <div className="watchlist">
+    <div
+      ref={containerRef}
+      className={`watchlist ${viewSettings.tableView ? 'table-view' : 'compact-view'}`}
+      style={{ width }}
+    >
+      {/* Resize Handle */}
+      <div
+        className={`resize-handle ${isResizing ? 'dragging' : ''}`}
+        onMouseDown={handleMouseDown}
+      />
+
+      {/* Header */}
       <div className="watchlist-header">
         <h3>Danh sách theo dõi (Crypto)</h3>
+        <div className="header-actions">
+          <div className="menu-container" ref={menuRef}>
+            <button
+              className="menu-btn"
+              onClick={() => setMenuOpen(!menuOpen)}
+              title="Tùy chỉnh"
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div className="menu-dropdown">
+                {/* Table View Toggle */}
+                <div className="menu-section">
+                  <label className="menu-toggle">
+                    <span>Chế độ xem dạng bảng</span>
+                    <input
+                      type="checkbox"
+                      checked={viewSettings.tableView}
+                      onChange={() => toggleViewSetting('tableView')}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div className="menu-divider"></div>
+
+                {/* Column Visibility */}
+                <div className="menu-section">
+                  <div className="menu-section-title">TÙY CHỈNH CỘT</div>
+                  {Object.entries(viewSettings.columns).map(([key, value]) => (
+                    <label className="menu-checkbox" key={key}>
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={() => toggleViewSetting('columns', key)}
+                      />
+                      <span className="checkmark"></span>
+                      <span>
+                        {key === 'price' && 'Lần cuối'}
+                        {key === 'change' && 'Thay đổi giá'}
+                        {key === 'changePercent' && '% Thay đổi'}
+                        {key === 'volume' && 'Khối lượng'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="menu-divider"></div>
+
+                {/* Symbol Display */}
+                <div className="menu-section">
+                  <div className="menu-section-title">HIỂN THỊ MÃ GIAO DỊCH</div>
+                  {Object.entries(viewSettings.symbolDisplay).map(([key, value]) => (
+                    <label className="menu-checkbox" key={key}>
+                      <input
+                        type="checkbox"
+                        checked={value}
+                        onChange={() => toggleViewSetting('symbolDisplay', key)}
+                      />
+                      <span className="checkmark"></span>
+                      <span>
+                        {key === 'logo' && 'Logo'}
+                        {key === 'ticker' && 'Ticker'}
+                        {key === 'description' && 'Mô tả'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
+      {/* Table Header (only in table view) */}
+      {viewSettings.tableView && (
+        <div className="table-header">
+          <div className="th-symbol">Mã</div>
+          {viewSettings.columns.price && <div className="th-price">Lần cuối</div>}
+          {viewSettings.columns.change && <div className="th-change">Th.đổi</div>}
+          {viewSettings.columns.changePercent && <div className="th-percent">%Thđổi</div>}
+          {viewSettings.columns.volume && <div className="th-volume">Khối lượng</div>}
+        </div>
+      )}
+
+      {/* Watchlist Items */}
       <div className="watchlist-items">
         {symbols.map((symbol) => (
           <div
@@ -51,37 +320,103 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
             className={`watchlist-item ${selectedSymbol === symbol.code ? 'selected' : ''}`}
             onClick={() => onSymbolSelect(symbol.code)}
           >
-            <div className="symbol-info">
-              <span className="symbol-icon">{getSymbolIcon(symbol.type)}</span>
-              <div className="symbol-details">
-                <div className="symbol-code">{symbol.code}</div>
-                <div className="symbol-name">{symbol.name}</div>
-              </div>
-            </div>
-            <div className="symbol-price">
-              <div className="price">{symbol.price.toLocaleString()}</div>
-              <div className={`change ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
-                {symbol.change >= 0 ? '+' : ''}{symbol.change.toFixed(2)} ({symbol.changePercent.toFixed(2)}%)
-              </div>
-            </div>
+            {viewSettings.tableView ? (
+              // Table View Row
+              <>
+                <div className="cell-symbol">
+                  {viewSettings.symbolDisplay.logo && (
+                    <span className="symbol-icon">{getSymbolIcon(symbol.code)}</span>
+                  )}
+                  <div className="symbol-text">
+                    {viewSettings.symbolDisplay.ticker && (
+                      <div className="symbol-code">{symbol.code}</div>
+                    )}
+                    {viewSettings.symbolDisplay.description && (
+                      <div className="symbol-name">{symbol.name}</div>
+                    )}
+                  </div>
+                </div>
+                {viewSettings.columns.price && (
+                  <div className="cell-price">{formatPrice(symbol.price, symbol.code)}</div>
+                )}
+                {viewSettings.columns.change && (
+                  <div className={`cell-change ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
+                    {symbol.price > 0 ? (symbol.change >= 0 ? '+' : '') + symbol.change.toFixed(2) : '—'}
+                  </div>
+                )}
+                {viewSettings.columns.changePercent && (
+                  <div className={`cell-percent ${symbol.changePercent >= 0 ? 'positive' : 'negative'}`}>
+                    {symbol.price > 0 ? (symbol.changePercent >= 0 ? '+' : '') + symbol.changePercent.toFixed(2) + '%' : '—'}
+                  </div>
+                )}
+                {viewSettings.columns.volume && (
+                  <div className="cell-volume">{formatVolume(symbol.volume)}</div>
+                )}
+              </>
+            ) : (
+              // Compact View
+              <>
+                <div className="symbol-info">
+                  {viewSettings.symbolDisplay.logo && (
+                    <span className="symbol-icon">{getSymbolIcon(symbol.code)}</span>
+                  )}
+                  <div className="symbol-details">
+                    {viewSettings.symbolDisplay.ticker && (
+                      <div className="symbol-code">{symbol.code}</div>
+                    )}
+                    {viewSettings.symbolDisplay.description && (
+                      <div className="symbol-name">{symbol.name}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="symbol-price">
+                  {viewSettings.columns.price && (
+                    <div className="price">{formatPrice(symbol.price, symbol.code)}</div>
+                  )}
+                  {(viewSettings.columns.change || viewSettings.columns.changePercent) && (
+                    <div className={`change ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
+                      {viewSettings.columns.change && symbol.price > 0 && (
+                        <span>{symbol.change >= 0 ? '+' : ''}{symbol.change.toFixed(2)}</span>
+                      )}
+                      {viewSettings.columns.change && viewSettings.columns.changePercent && ' '}
+                      {viewSettings.columns.changePercent && symbol.price > 0 && (
+                        <span>({symbol.changePercent.toFixed(2)}%)</span>
+                      )}
+                      {symbol.price === 0 && '—'}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         ))}
       </div>
 
+      {/* Symbol Detail Panel */}
       <div className="symbol-detail">
         <h4>{selectedSymbol}</h4>
         <div className="detail-row">
           <span className="label">Giá</span>
           <span className="value">
-            {symbols.find(s => s.code === selectedSymbol)?.price.toLocaleString() || 'N/A'}
+            {selectedSymbolData ? formatPrice(selectedSymbolData.price, selectedSymbol) : 'N/A'}
           </span>
         </div>
         <div className="detail-row">
           <span className="label">Thay đổi</span>
-          <span className={`value ${(symbols.find(s => s.code === selectedSymbol)?.change || 0) >= 0 ? 'positive' : 'negative'}`}>
-            {symbols.find(s => s.code === selectedSymbol)?.change.toFixed(2) || 'N/A'}
+          <span
+            className={`value ${(selectedSymbolData?.change || 0) >= 0 ? 'positive' : 'negative'}`}
+          >
+            {selectedSymbolData && selectedSymbolData.price > 0
+              ? selectedSymbolData.change.toFixed(2)
+              : 'N/A'}
           </span>
         </div>
+        {selectedSymbolData?.volume !== undefined && selectedSymbolData.volume > 0 && (
+          <div className="detail-row">
+            <span className="label">Khối lượng</span>
+            <span className="value">{formatVolume(selectedSymbolData.volume)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

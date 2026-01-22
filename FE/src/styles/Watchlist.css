@@ -1,12 +1,33 @@
 .watchlist {
-  width: 350px;
-  height: 100vh;
+  min-width: 350px;
+  max-width: 500px;
+  height: 100%;
   background: #1e222d;
   color: #d1d4dc;
   display: flex;
   flex-direction: column;
   border-left: 1px solid #2b2f3a;
   overflow-y: auto;
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Resize Handle */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.resize-handle:hover,
+.resize-handle.dragging {
+  background: #2962ff;
 }
 
 .watchlist-header {
@@ -21,6 +42,175 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Menu Button and Dropdown */
+.menu-container {
+  position: relative;
+}
+
+.menu-btn {
+  background: transparent;
+  border: 1px solid #2b2f3a;
+  color: #d1d4dc;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  letter-spacing: 1px;
+  transition: all 0.2s;
+}
+
+.menu-btn:hover {
+  background: #2b2f3a;
+}
+
+.menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 220px;
+  background: #1e222d;
+  border: 1px solid #2b2f3a;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.menu-section {
+  padding: 12px 16px;
+}
+
+.menu-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: #787b86;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.menu-divider {
+  height: 1px;
+  background: #2b2f3a;
+}
+
+/* Toggle Switch */
+.menu-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.menu-toggle input {
+  display: none;
+}
+
+.toggle-slider {
+  width: 36px;
+  height: 20px;
+  background: #363a45;
+  border-radius: 10px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  background: #787b86;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.menu-toggle input:checked+.toggle-slider {
+  background: #2962ff;
+}
+
+.menu-toggle input:checked+.toggle-slider::before {
+  left: 18px;
+  background: white;
+}
+
+/* Checkbox Styles */
+.menu-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 6px 0;
+}
+
+.menu-checkbox input {
+  display: none;
+}
+
+.menu-checkbox .checkmark {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #363a45;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.menu-checkbox input:checked+.checkmark {
+  background: #2962ff;
+  border-color: #2962ff;
+}
+
+.menu-checkbox input:checked+.checkmark::after {
+  content: '✓';
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Table Header */
+.table-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background: #131722;
+  border-bottom: 1px solid #2b2f3a;
+  font-size: 11px;
+  color: #787b86;
+  font-weight: 500;
+}
+
+.th-symbol {
+  flex: 2;
+  min-width: 80px;
+}
+
+.th-price,
+.th-change,
+.th-percent,
+.th-volume {
+  flex: 1;
+  text-align: right;
+  min-width: 60px;
 }
 
 .add-btn {
@@ -47,11 +237,135 @@
   overflow-y: auto;
 }
 
-.watchlist-item {
+/* Table View Styles */
+.watchlist.table-view .watchlist-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+}
+
+.watchlist.table-view .cell-symbol {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 80px;
+}
+
+.watchlist.table-view .cell-price,
+.watchlist.table-view .cell-change,
+.watchlist.table-view .cell-percent,
+.watchlist.table-view .cell-volume {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  min-width: 60px;
+}
+
+.watchlist.table-view .cell-price {
+  font-weight: 600;
+}
+
+.watchlist.table-view .cell-change.positive,
+.watchlist.table-view .cell-percent.positive {
+  color: #26a69a;
+}
+
+.watchlist.table-view .cell-change.negative,
+.watchlist.table-view .cell-percent.negative {
+  color: #ef5350;
+}
+
+.watchlist.table-view .cell-volume {
+  color: #787b86;
+}
+
+.watchlist.table-view .symbol-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.watchlist.table-view .symbol-code {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.watchlist.table-view .symbol-name {
+  font-size: 10px;
+  color: #787b86;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.watchlist.table-view .symbol-icon {
+  font-size: 16px;
+}
+
+/* Compact View Styles */
+.watchlist.compact-view .watchlist-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
+}
+
+.compact-view .symbol-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.compact-view .symbol-icon {
+  font-size: 20px;
+}
+
+.compact-view .symbol-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.compact-view .symbol-code {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.compact-view .symbol-name {
+  font-size: 11px;
+  color: #787b86;
+}
+
+.compact-view .symbol-price {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.compact-view .price {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.compact-view .change {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+}
+
+.compact-view .change.positive {
+  color: #26a69a;
+  background: rgba(38, 166, 154, 0.1);
+}
+
+.compact-view .change.negative {
+  color: #ef5350;
+  background: rgba(239, 83, 80, 0.1);
+}
+
+/* Common Watchlist Item Styles */
+.watchlist-item {
   cursor: pointer;
   border-bottom: 1px solid #2b2f3a;
   transition: background 0.2s;
@@ -169,4 +483,9 @@
 
 .watchlist-items::-webkit-scrollbar-thumb:hover {
   background: #363a45;
+}
+
+/* Prevent text selection during resize */
+.watchlist.resizing {
+  user-select: none;
 }

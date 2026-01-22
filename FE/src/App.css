@@ -15,9 +15,34 @@ body {
 
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   background: #1e222d;
   color: #d1d4dc;
+  overflow: hidden;
+}
+
+/* Full-width header */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: #131722;
+  border-bottom: 1px solid #2b2f3a;
+  flex-shrink: 0;
+}
+
+.app-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* Main content: chart + watchlist side by side */
+.app-content {
+  display: flex;
+  flex: 1;
   overflow: hidden;
 }
 
@@ -28,6 +53,7 @@ body {
   overflow: hidden;
 }
 
+/* Legacy chart-header - kept for backward compatibility */
 .chart-header {
   display: flex;
   justify-content: space-between;
@@ -55,6 +81,7 @@ body {
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
+  transition: all 0.2s;
 }
 
 .logout-btn:hover {
