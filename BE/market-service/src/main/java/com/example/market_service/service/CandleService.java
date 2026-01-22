@@ -55,30 +55,6 @@ public class CandleService {
 			throw new RuntimeException(e);
 		}
 	}
-	public void upsertCandle(
-			String symbol,
-			String interval,
-			Long openTime,
-			Long closeTime,
-			BigDecimal open,
-			BigDecimal high,
-			BigDecimal low,
-			BigDecimal close,
-			BigDecimal volume
-	) {
-		candleRepository.upsertCandle(
-				symbol,
-				interval,
-				openTime,
-				closeTime,
-				open,
-				high,
-				low,
-				close,
-				volume
-		);
-	}
-
 	public List<Candle> getRecentCandles(
 			String symbol,
 			String interval,
@@ -137,7 +113,14 @@ public class CandleService {
         INSERT INTO candles
         (symbol,interval,open_time,close_time,open,high,low,close,volume)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (symbol, interval, open_time)
+        DO UPDATE SET
+            close_time = EXCLUDED.close_time,
+            open       = EXCLUDED.open,
+            high       = EXCLUDED.high,
+            low        = EXCLUDED.low,
+            close      = EXCLUDED.close,
+            volume     = EXCLUDED.volume
     """;
 
 		jdbcTemplate.batchUpdate(sql, candles, 500,

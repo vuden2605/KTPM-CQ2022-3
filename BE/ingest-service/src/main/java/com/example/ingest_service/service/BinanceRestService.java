@@ -82,7 +82,7 @@ public class BinanceRestService {
 						.low(new BigDecimal(l))
 						.close(new BigDecimal(c))
 						.volume(new BigDecimal(v))
-						.isClosed(true) // REST trả về toàn bộ là closed candles
+						.isClosed(true)
 						.build();
 				result.add(candle);
 			}

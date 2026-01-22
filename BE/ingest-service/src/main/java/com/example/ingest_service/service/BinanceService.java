@@ -1,6 +1,6 @@
 package com.example.ingest_service.service;
 
-import com.example.ingest_service.configure.StorageServiceWebClient;
+import com.example.ingest_service.configure.MarketServiceWebClient;
 import com.example.ingest_service.configure.TradeProperties;
 import com.example.ingest_service.dto.request.Candle;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +18,6 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,7 +30,7 @@ public class BinanceService {
 	private final CandleKafkaProducer kafkaService;
 	private final ObjectMapper objectMapper;
 	private final BinanceRestService binanceRestService;
-	private final StorageServiceWebClient storageServiceClient;
+	private final MarketServiceWebClient storageServiceClient;
 	private final TradeProperties tradeProperties;
 
 	@Value("${binance.ws.base-url}")
