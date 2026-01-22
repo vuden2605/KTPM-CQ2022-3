@@ -112,8 +112,8 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
               price: priceData.price,
               change: priceData.change,
               changePercent: priceData.changePercent,
-              volume: priceData.volume24h,      // Use 24h volume from 1d candle
-              openPrice: priceData.dailyOpen,   // Use daily open for reference
+              volume: priceData.volume24h,         // 24h volume from 1d candle
+              openPrice: priceData.price24hAgo,    // Price 24h ago for reference
             };
           }
           return s;
