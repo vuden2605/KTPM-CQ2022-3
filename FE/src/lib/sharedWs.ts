@@ -1,12 +1,11 @@
 import { Client } from '@stomp/stompjs';
 import type { IMessage, StompSubscription } from '@stomp/stompjs';
-import SockJS from 'sockjs-client';
 
 type Candle = { time: number; open: number; high: number; low: number; close: number; symbol?: string; volume?: number };
 
 type Listener = (c: Candle) => void;
 
-const WS_URL = 'http://localhost/ws';
+const WS_URL = 'ws://localhost/ws';
 
 class SharedWs {
   private client: Client | null = null;
@@ -23,7 +22,7 @@ class SharedWs {
 
   private initClient() {
     this.client = new Client({
-      webSocketFactory: () => new SockJS(WS_URL),
+      brokerURL: WS_URL,
       reconnectDelay: 5000,
       heartbeatIncoming: 4000,
       heartbeatOutgoing: 4000,

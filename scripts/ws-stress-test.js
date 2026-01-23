@@ -5,12 +5,12 @@
  * Example: node ws-stress-test.js 1000 http://localhost/ws
  */
 
-const SockJS = require('sockjs-client');
+const WebSocket = require('ws');
 const Stomp = require('@stomp/stompjs');
 
 // Configuration
 const DEFAULT_NUM_CLIENTS = 1000;
-const DEFAULT_WS_URL = 'http://localhost/ws';
+const DEFAULT_WS_URL = 'ws://localhost/ws';
 const CONNECT_DELAY_MS = 10; // Delay between each connection to avoid burst
 const TEST_DURATION_MS = 60000; // Run test for 60 seconds
 const SUBSCRIBE_TOPIC = '/topic/candle.BTCUSDT.1m';
@@ -45,7 +45,7 @@ class TestClient {
 
       try {
         this.client = new Stomp.Client({
-          webSocketFactory: () => new SockJS(wsUrl),
+          webSocketFactory: () => new WebSocket(wsUrl),
           reconnectDelay: 0, // Disable auto-reconnect for testing
           debug: () => { }, // Disable debug logs
           onConnect: () => {
@@ -117,18 +117,18 @@ function printStats() {
   console.log(`Target URL: ${wsUrl}`);
   console.log(`Target Clients: ${numClients}`);
   console.log('');
-  console.log(`✅ Connected:   ${stats.connected}`);
-  console.log(`❌ Failed:      ${stats.failed}`);
-  console.log(`📨 Messages:    ${stats.messagesReceived}`);
-  console.log(`🔌 Disconnected: ${stats.disconnected}`);
-  console.log(`⏱️  Avg Connect: ${avgConnectTime}ms`);
+  console.log(`Connected:   ${stats.connected}`);
+  console.log(`Failed:      ${stats.failed}`);
+  console.log(`Messages:    ${stats.messagesReceived}`);
+  console.log(`Disconnected: ${stats.disconnected}`);
+  console.log(`Avg Connect: ${avgConnectTime}ms`);
   console.log('');
 
   const successRate = ((stats.connected / stats.attempted) * 100).toFixed(2);
-  console.log(`📊 Success Rate: ${successRate}%`);
+  console.log(`Success Rate: ${successRate}%`);
 
   if (stats.errors.length > 0) {
-    console.log('\n⚠️  First 10 errors:');
+    console.log('\nFirst 10 errors:');
     stats.errors.slice(0, 10).forEach((e) => console.log(`   - ${e}`));
   }
 
@@ -136,7 +136,7 @@ function printStats() {
 }
 
 async function runTest() {
-  console.log(`\n🚀 Starting WebSocket Stress Test`);
+  console.log(`\nStarting WebSocket Stress Test`);
   console.log(`   URL: ${wsUrl}`);
   console.log(`   Clients: ${numClients}`);
   console.log(`   Topic: ${SUBSCRIBE_TOPIC}\n`);
@@ -164,23 +164,23 @@ async function runTest() {
   await sleep(15000);
 
   // Print intermediate stats
-  console.log(`\n📊 After connection phase:`);
+  console.log(`\nAfter connection phase:`);
   printStats();
 
   // Keep test running to receive messages
-  console.log(`⏳ Running for ${TEST_DURATION_MS / 1000}s to collect messages...`);
+  console.log(`Running for ${TEST_DURATION_MS / 1000}s to collect messages...`);
   await sleep(TEST_DURATION_MS);
 
   // Final stats
-  console.log(`\n📊 Final results after ${TEST_DURATION_MS / 1000}s:`);
+  console.log(`\nFinal results after ${TEST_DURATION_MS / 1000}s:`);
   printStats();
 
   // Cleanup
-  console.log('🧹 Disconnecting clients...');
+  console.log('Disconnecting clients...');
   clients.forEach((c) => c.disconnect());
 
   await sleep(2000);
-  console.log('✅ Test complete!\n');
+  console.log('Test complete!\n');
 
   process.exit(0);
 }
