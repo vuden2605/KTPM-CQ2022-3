@@ -1,192 +1,97 @@
 /**
- * WebSocket Stress Test Script for Native WebSocket
+ * WebSocket Stress Test Script (k6)
  * 
- * Usage: node ws-stress-test.js [numClients] [wsUrl]
- * Example: node ws-stress-test.js 1000 ws://localhost/ws
+ * This script tests WebSocket connections using STOMP protocol.
+ * It ramps up from 1,000 → 5,000 → 10,000 concurrent users.
+ * 
+ * REQUIREMENTS:
+ *   - Docker must be running
+ *   - All services must be up: docker-compose up -d
+ * 
+ * HOW TO RUN (using Docker - recommended):
+ *   docker run --rm -i --network ktpm-cq2022-3_crypto-network grafana/k6 run - < scripts/ws-stress-test.js
+ * 
+ * CUSTOM VU COUNT (override stages):
+ *   docker run --rm -i --network ktpm-cq2022-3_crypto-network grafana/k6 run --vus 5000 --duration 1m - < scripts/ws-stress-test.js
+ * 
+ * EXAMPLE QUICK TESTS:
+ *   1k users:  docker run --rm -i --network ktpm-cq2022-3_crypto-network grafana/k6 run --vus 1000 --duration 30s - < scripts/ws-stress-test.js
+ *   5k users:  docker run --rm -i --network ktpm-cq2022-3_crypto-network grafana/k6 run --vus 5000 --duration 30s - < scripts/ws-stress-test.js
+ *   10k users: docker run --rm -i --network ktpm-cq2022-3_crypto-network grafana/k6 run --vus 10000 --duration 30s - < scripts/ws-stress-test.js
  */
 
-const WebSocket = require('ws');
-const Stomp = require('@stomp/stompjs');
+import ws from 'k6/ws';
+import { sleep } from 'k6';
+import { Counter, Trend } from 'k6/metrics';
 
-// Configuration
-const DEFAULT_NUM_CLIENTS = 1000;
-const DEFAULT_WS_URL = 'ws://localhost/ws';
-const CONNECT_DELAY_MS = 10; // Delay between each connection to avoid burst
-const TEST_DURATION_MS = 60000; // Run test for 60 seconds
-const SUBSCRIBE_TOPIC = '/topic/candle.BTCUSDT.1m';
+// Custom Metrics
+const connectedUsers = new Counter('connected_users');
+const messageCount = new Counter('received_messages');
+const connectionErrors = new Counter('connection_errors');
+const connectTime = new Trend('connect_time');
 
-// Parse arguments
-const numClients = parseInt(process.argv[2]) || DEFAULT_NUM_CLIENTS;
-const wsUrl = process.argv[3] || DEFAULT_WS_URL;
-
-// Stats
-let stats = {
-  attempted: 0,
-  connected: 0,
-  failed: 0,
-  messagesReceived: 0,
-  disconnected: 0,
-  errors: [],
-  connectTimes: [],
+// Test Configuration
+export const options = {
+  // Define stages to simulate ramping up traffic
+  stages: [
+    { duration: '30s', target: 1000 },  // Ramp up to 1000 users
+    { duration: '1m', target: 1000 },   // Stay at 1000
+    { duration: '30s', target: 5000 },  // Ramp up to 5000
+    { duration: '1m', target: 5000 },   // Stay at 5000
+    { duration: '30s', target: 10000 }, // Ramp up to 10000!
+    { duration: '1m', target: 10000 },  // Stay at 10000
+    { duration: '30s', target: 0 },     // Scale down
+  ],
 };
 
-class TestClient {
-  constructor(id) {
-    this.id = id;
-    this.client = null;
-    this.connected = false;
-    this.startTime = null;
-  }
+// Use 'nginx' when running k6 inside Docker network
+// Use 'localhost' when running k6 on Windows directly
+const url = __ENV.WS_URL || 'ws://nginx/ws';
 
-  connect() {
-    return new Promise((resolve) => {
-      this.startTime = Date.now();
-      stats.attempted++;
+export default function () {
+  const params = { tags: { my_tag: 'ws-stress' } };
+  const startTime = Date.now();
 
-      try {
-        this.client = new Stomp.Client({
-          webSocketFactory: () => new WebSocket(wsUrl),
-          reconnectDelay: 0, // Disable auto-reconnect for testing
-          debug: () => { }, // Disable debug logs
-          onConnect: () => {
-            const connectTime = Date.now() - this.startTime;
-            stats.connected++;
-            stats.connectTimes.push(connectTime);
-            this.connected = true;
+  const res = ws.connect(url, params, function (socket) {
+    socket.on('open', function open() {
+      // 1. Send STOMP CONNECT Frame
+      const connectFrame = 'CONNECT\naccept-version:1.2,1.1,1.0\nheart-beat:10000,10000\n\n\0';
+      socket.send(connectFrame);
+    });
 
-            // Subscribe to topic
-            this.client.subscribe(SUBSCRIBE_TOPIC, (message) => {
-              stats.messagesReceived++;
-            });
+    socket.on('message', function (data) {
+      // 2. Handle STOMP responses
+      if (data.startsWith('CONNECTED')) {
+        // Connected successfully
+        const latency = Date.now() - startTime;
+        connectTime.add(latency);
+        connectedUsers.add(1);
 
-            resolve(true);
-          },
-          onDisconnect: () => {
-            if (this.connected) {
-              stats.disconnected++;
-              this.connected = false;
-            }
-          },
-          onStompError: (frame) => {
-            stats.failed++;
-            stats.errors.push(`Client ${this.id}: ${frame.headers['message']}`);
-            resolve(false);
-          },
-          onWebSocketError: (event) => {
-            stats.failed++;
-            stats.errors.push(`Client ${this.id}: WebSocket error`);
-            resolve(false);
-          },
-        });
-
-        this.client.activate();
-
-        // Timeout after 10 seconds
-        setTimeout(() => {
-          if (!this.connected) {
-            stats.failed++;
-            stats.errors.push(`Client ${this.id}: Connection timeout`);
-            resolve(false);
-          }
-        }, 10000);
-      } catch (e) {
-        stats.failed++;
-        stats.errors.push(`Client ${this.id}: ${e.message}`);
-        resolve(false);
+        // 3. Subscribe to Topic
+        const subscribeFrame = 'SUBSCRIBE\nid:sub-0\ndestination:/topic/candle.BTCUSDT.1m\n\n\0';
+        socket.send(subscribeFrame);
+      } else if (data.startsWith('MESSAGE')) {
+        // Received broadcast message
+        messageCount.add(1);
+      } else if (data.startsWith('ERROR')) {
+        console.error('STOMP Error: ' + data);
       }
     });
-  }
 
-  disconnect() {
-    if (this.client && this.connected) {
-      this.client.deactivate();
-    }
-  }
+    socket.on('close', function () {
+      // console.log('Disconnected');
+    });
+
+    socket.on('error', function (e) {
+      connectionErrors.add(1);
+      // console.error('WebSocket Error: ' + e.error());
+    });
+
+    // Keep connection alive for a random duration between 30s and 60s
+    // to simulate real user session overlap during ramp-up
+    sleep(Math.random() * 30 + 30);
+  });
+
+  // Note: ws.connect() in k6 doesn't return a response object like HTTP
+  // Success is tracked via the 'connected_users' custom metric
 }
-
-async function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function printStats() {
-  const avgConnectTime = stats.connectTimes.length > 0
-    ? (stats.connectTimes.reduce((a, b) => a + b, 0) / stats.connectTimes.length).toFixed(2)
-    : 0;
-
-  console.log('\n========== WebSocket Stress Test Results ==========');
-  console.log(`Target URL: ${wsUrl}`);
-  console.log(`Target Clients: ${numClients}`);
-  console.log('');
-  console.log(`Connected:   ${stats.connected}`);
-  console.log(`Failed:      ${stats.failed}`);
-  console.log(`Messages:    ${stats.messagesReceived}`);
-  console.log(`Disconnected: ${stats.disconnected}`);
-  console.log(`Avg Connect: ${avgConnectTime}ms`);
-  console.log('');
-
-  const successRate = ((stats.connected / stats.attempted) * 100).toFixed(2);
-  console.log(`Success Rate: ${successRate}%`);
-
-  if (stats.errors.length > 0) {
-    console.log('\nFirst 10 errors:');
-    stats.errors.slice(0, 10).forEach((e) => console.log(`   - ${e}`));
-  }
-
-  console.log('===================================================\n');
-}
-
-async function runTest() {
-  console.log(`\nStarting WebSocket Stress Test`);
-  console.log(`   URL: ${wsUrl}`);
-  console.log(`   Clients: ${numClients}`);
-  console.log(`   Topic: ${SUBSCRIBE_TOPIC}\n`);
-
-  const clients = [];
-
-  // Create and connect clients with delay
-  for (let i = 0; i < numClients; i++) {
-    const client = new TestClient(i);
-    clients.push(client);
-
-    // Don't await - connect in parallel with small delay
-    client.connect();
-
-    if (i % 100 === 0) {
-      console.log(`   Connecting clients: ${i}/${numClients}`);
-    }
-
-    await sleep(CONNECT_DELAY_MS);
-  }
-
-  console.log(`   All connection attempts initiated, waiting for results...`);
-
-  // Wait for connections to establish
-  await sleep(15000);
-
-  // Print intermediate stats
-  console.log(`\nAfter connection phase:`);
-  printStats();
-
-  // Keep test running to receive messages
-  console.log(`Running for ${TEST_DURATION_MS / 1000}s to collect messages...`);
-  await sleep(TEST_DURATION_MS);
-
-  // Final stats
-  console.log(`\nFinal results after ${TEST_DURATION_MS / 1000}s:`);
-  printStats();
-
-  // Cleanup
-  console.log('Disconnecting clients...');
-  clients.forEach((c) => c.disconnect());
-
-  await sleep(2000);
-  console.log('Test complete!\n');
-
-  process.exit(0);
-}
-
-// Run the test
-runTest().catch((e) => {
-  console.error('Test failed:', e);
-  process.exit(1);
-});
