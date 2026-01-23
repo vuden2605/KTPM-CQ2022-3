@@ -50,6 +50,14 @@ SOURCES = [
         "Enabled": True,
         "Config": {"type": "rss", "frequency": "weekly"},
     },
+    {
+        "Name": "CNBC",
+        "Code": "cnbc",
+        "BaseUrl": "https://www.cnbc.com",
+        "ListUrl": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+        "Enabled": True,
+        "Config": {"type": "rss", "frequency": "hourly"},
+    },
      {
         "Name": "TradingView News",
         "Code": "tradingviewnews",

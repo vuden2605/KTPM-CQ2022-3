@@ -31,11 +31,13 @@ from dotenv import load_dotenv
 from app.crawlers.coindesk_crawler import CoindeskCrawler
 from app.crawlers.cointelegraph_crawler import CointelegraphCrawler
 from app.crawlers.decrypt import DecryptCrawler
+from app.crawlers.cnbc_crawler import CNBCCrawler
 
 AVAILABLE = {
     "coindesk": CoindeskCrawler,
     "cointelegraph": CointelegraphCrawler,
     "decrypt": DecryptCrawler,
+    "cnbc": CNBCCrawler,
 }
 
 

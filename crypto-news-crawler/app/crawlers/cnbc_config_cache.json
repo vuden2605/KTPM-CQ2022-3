@@ -1,0 +1,51 @@
+{
+  "list_url": "https://www.cnbc.com/id/10000664/device/rss/rss.html",
+  "url_prefix": "https://www.cnbc.com",
+  "feed_exclude_patterns": [
+    "/video/"
+  ],
+  "article": {
+    "title_selector": "h1",
+    "content_selector": "div.ArticleBody-articleBody, div.ArticleBody-wrapper, article",
+    "date_selector_meta": "article:published_time",
+    "author_selector": "meta[name='author']",
+    "prefer_rss_date": true,
+    "content_paragraph_selectors": [
+      "div.ArticleBody-articleBody p",
+      "div.ArticleBody-wrapper p",
+      "article p"
+    ],
+    "description_meta_keys": [
+      [
+        "name",
+        "description"
+      ],
+      [
+        "property",
+        "og:description"
+      ],
+      [
+        "name",
+        "twitter:description"
+      ]
+    ],
+    "title_meta_keys": [
+      [
+        "property",
+        "og:title"
+      ],
+      [
+        "property",
+        "twitter:title"
+      ],
+      [
+        "name",
+        "parsely-title"
+      ],
+      [
+        "name",
+        "title"
+      ]
+    ]
+  }
+}
