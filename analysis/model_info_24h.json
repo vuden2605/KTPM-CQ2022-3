@@ -1,0 +1,16 @@
+{
+  "feature_cols": [
+    "sentiment_score",
+    "breaking_score",
+    "vol_pre_24h",
+    "volume_pre_24h",
+    "baseline_ret_24h",
+    "is_breaking_int",
+    "sentiment_extreme"
+  ],
+  "model_name": "XGBoost",
+  "test_accuracy": 0.8809523809523809,
+  "trained_date": "2026-01-23T23:47:41.874200",
+  "threshold": 0.2,
+  "horizon": "24h"
+}

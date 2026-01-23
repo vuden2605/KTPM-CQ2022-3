@@ -1,0 +1,18 @@
+{
+  "feature_cols": [
+    "sentiment_score",
+    "breaking_score",
+    "vol_pre_24h",
+    "volume_pre_24h",
+    "baseline_ret_1h",
+    "is_breaking_int",
+    "sentiment_extreme"
+  ],
+  "model_name": "Gradient Boosting",
+  "target": "label_1h (based on abret_1h)",
+  "test_accuracy": 0.7261904761904762,
+  "trained_date": "2026-01-23T23:51:44.037383",
+  "threshold": 0.3,
+  "horizon": "1h",
+  "uses_abnormal_return": true
+}
