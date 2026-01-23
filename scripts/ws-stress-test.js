@@ -1,8 +1,8 @@
 /**
- * WebSocket Stress Test Script for STOMP over SockJS
+ * WebSocket Stress Test Script for Native WebSocket
  * 
  * Usage: node ws-stress-test.js [numClients] [wsUrl]
- * Example: node ws-stress-test.js 1000 http://localhost/ws
+ * Example: node ws-stress-test.js 1000 ws://localhost/ws
  */
 
 const WebSocket = require('ws');
