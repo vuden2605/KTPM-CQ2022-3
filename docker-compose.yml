@@ -108,6 +108,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      market-service:
+        condition: service_started
     ports:
       - "8081:8081"
     environment:
