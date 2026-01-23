@@ -67,8 +67,8 @@ public class BinanceService {
 
 	@PostConstruct
 	public void startBinanceWebSocket() {
-		backfillOnStart();
 		connectWebSocket();
+		backfillOnStart();
 	}
 
 	@PreDestroy
@@ -180,10 +180,14 @@ public class BinanceService {
 		if (candles.isEmpty()) {
 			return;
 		}
-
+		long now = System.currentTimeMillis();
 		for (Candle candle : candles) {
-			String json = objectMapper.writeValueAsString(candle);
-			kafkaService.publishClosedCandle(symbol, interval, json);
+			if(candle.getCloseTime() < now ) {
+				candle.setIsClosed(true);
+				String json = objectMapper.writeValueAsString(candle);
+				kafkaService.publishClosedCandle(symbol, interval, json);
+			}
+
 		}
 	}
 

@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -108,7 +109,7 @@ public class CandleService {
 				);
 	}
 	@Transactional
-	public void batchInsert(List<Candle> candles) {
+	public List<Candle> batchInsertIdempotent (List<Candle> candles) {
 		String sql = """
         INSERT INTO candles
         (symbol,interval,open_time,close_time,open,high,low,close,volume)
@@ -122,20 +123,29 @@ public class CandleService {
             close      = EXCLUDED.close,
             volume     = EXCLUDED.volume
     """;
+		try {
+			jdbcTemplate.batchUpdate(sql, candles, 500,
+					(ps, c) -> {
+						ps.setString(1, c.getSymbol());
+						ps.setString(2, c.getInterval());
+						ps.setLong(3, c.getOpenTime());
+						ps.setLong(4, c.getCloseTime());
+						ps.setBigDecimal(5, c.getOpen());
+						ps.setBigDecimal(6, c.getHigh());
+						ps.setBigDecimal(7, c.getLow());
+						ps.setBigDecimal(8, c.getClose());
+						ps.setBigDecimal(9, c.getVolume());
+					}
+			);
+			return candles;
+		}
+		catch (Exception e) {
+			log.error("Batch insert failed", e);
+			return candles.stream()
+					.filter(this::insertSingle)
+					.toList();
+		}
 
-		jdbcTemplate.batchUpdate(sql, candles, 500,
-				(ps, c) -> {
-					ps.setString(1, c.getSymbol());
-					ps.setString(2, c.getInterval());
-					ps.setLong(3, c.getOpenTime());
-					ps.setLong(4, c.getCloseTime());
-					ps.setBigDecimal(5, c.getOpen());
-					ps.setBigDecimal(6, c.getHigh());
-					ps.setBigDecimal(7, c.getLow());
-					ps.setBigDecimal(8, c.getClose());
-					ps.setBigDecimal(9, c.getVolume());
-				}
-		);
 	}
 	public List<Candle> getCandlesBetweenOpenTimes(String symbol, String interval, long startTime, long endTime) {
 		String url = UriComponentsBuilder
@@ -194,6 +204,18 @@ public class CandleService {
 	public List<Candle> getLatestPrice(String interval) {
 		return candleRepository.findLatestCandlesByInterval(interval);
 
+	}
+	private boolean insertSingle(Candle candle) {
+		try {
+			candleRepository.save(candle);
+			return true;
+		} catch (DataIntegrityViolationException e) {
+			log.debug("Candle already exists: {}", candle);
+			return false;
+		} catch (Exception e) {
+			log.error("Failed to insert candle: {}", candle, e);
+			return false;
+		}
 	}
 
 }

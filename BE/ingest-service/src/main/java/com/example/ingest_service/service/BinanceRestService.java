@@ -82,7 +82,6 @@ public class BinanceRestService {
 						.low(new BigDecimal(l))
 						.close(new BigDecimal(c))
 						.volume(new BigDecimal(v))
-						.isClosed(true)
 						.build();
 				result.add(candle);
 			}

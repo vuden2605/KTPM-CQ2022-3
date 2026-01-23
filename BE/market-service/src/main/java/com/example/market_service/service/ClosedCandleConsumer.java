@@ -5,13 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -21,70 +24,101 @@ public class ClosedCandleConsumer {
 	private final CandleService candleService;
 	private final RedisTemplate<String, String> redisTemplate;
 	private static final int MAX_CANDLES = 1000;
+
 	@KafkaListener(
 			topics = "${kafka.topics.closed-candles}",
-			groupId = "candle-redis-group",
+			groupId = "candle-processor-group",
 			containerFactory = "kafkaListenerContainerFactory"
 	)
-	public void consumeRedis(
+	public void consume(
 			List<ConsumerRecord<String, String>> records,
 			Acknowledgment ack
 	) {
 		if (records.isEmpty()) return;
 
-		try {
-			for (ConsumerRecord<String, String> record : records) {
-				Candle candle = objectMapper.readValue(record.value(), Candle.class);
-				String redisKey = "candles:"
-						+ candle.getSymbol() + ":"
-						+ candle.getInterval();
-				redisTemplate.opsForZSet().add(
-						redisKey,
-						record.value(),
-						candle.getOpenTime()
-				);
+		List<Candle> candles = parseCandles(records);
+		if (candles.isEmpty()) {
+			ack.acknowledge();
+			return;
+		}
 
-				Long setSize = redisTemplate.opsForZSet().size(redisKey);
-				if (setSize != null && setSize > MAX_CANDLES) {
-					long removeEnd = setSize - MAX_CANDLES - 1;
-					redisTemplate.opsForZSet().removeRange(
-							redisKey,
-							0,
-							removeEnd
-					);
+		try {
+			processCandles(candles);
+			ack.acknowledge();
+
+			log.info("Successfully processed {} candles", candles.size());
+
+		} catch (Exception e) {
+			log.error("Failed to process candles batch, will retry", e);
+
+		}
+	}
+
+	private void processCandles(List<Candle> candles) {
+
+		List<Candle> savedCandles = candleService.batchInsertIdempotent(candles);
+
+		Map<String, List<Candle>> groupedBySymbol = savedCandles.stream()
+				.collect(Collectors.groupingBy(
+						c -> c.getSymbol() + ":" + c.getInterval()
+				));
+
+		for (Map.Entry<String, List<Candle>> entry : groupedBySymbol.entrySet()) {
+			updateRedisHotdata(entry.getKey(), entry.getValue());
+		}
+	}
+
+	private void updateRedisHotdata(String key, List<Candle> candles) {
+		String redisKey = "candles:" + key;
+
+		try {
+			// Add candles using pipeline
+			redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+				for (Candle candle : candles) {
+					try {
+						String json = objectMapper.writeValueAsString(candle);
+						connection.zAdd(
+								redisKey.getBytes(),
+								candle.getOpenTime(),
+								json.getBytes()
+						);
+					} catch (Exception e) {
+						log.error("Failed to serialize candle", e);
+					}
 				}
+				return null;
+			});
+
+			Long setSize = redisTemplate.opsForZSet().size(redisKey);
+			if (setSize != null && setSize > MAX_CANDLES) {
+				long removeEnd = setSize - MAX_CANDLES - 1;
+				redisTemplate.opsForZSet().removeRange(redisKey, 0, removeEnd);
 			}
-			ack.acknowledge();
-		} catch (Exception e) {
-			log.error("Failed to consume closed candles", e);
-			throw new RuntimeException(e);
-		}
-	}
-	@KafkaListener(
-			topics = "${kafka.topics.closed-candles}",
-			groupId = "candle-db-group",
-			containerFactory = "kafkaListenerContainerFactory"
-	)
-	public void consumeDb(
-			List<ConsumerRecord<String, String>> records,
-			Acknowledgment ack
-	) {
-		if (records.isEmpty()) return;
 
-		try {
-			List<Candle> candles = records.stream().map(record -> {
-				try {
-					return objectMapper.readValue(record.value(), Candle.class);
-				} catch (Exception e) {
-					log.error("Failed to parse candle JSON: {}", record.value(), e);
-					return null;
-				}
-			}).filter(Objects::nonNull).toList();
-			candleService.batchInsert(candles);
-			ack.acknowledge();
 		} catch (Exception e) {
-			log.error("Failed to consume closed candles", e);
-			throw new RuntimeException(e);
+			log.error("Failed to update Redis hotdata for key: {}", redisKey, e);
+			throw e;
 		}
 	}
+
+	private List<Candle> parseCandles(List<ConsumerRecord<String, String>> records) {
+		return records.stream()
+				.map(record -> {
+					try {
+						return objectMapper.readValue(record.value(), Candle.class);
+					} catch (Exception e) {
+						log.error("Failed to parse candle: {}", record.value(), e);
+						sendToDLQ(record);
+						return null;
+					}
+				})
+				.filter(Objects::nonNull)
+				.toList();
+	}
+
+	private void sendToDLQ(ConsumerRecord<String, String> record) {
+		log.warn("Sent to DLQ: partition={}, offset={}",
+				record.partition(), record.offset());
+	}
+
 }
