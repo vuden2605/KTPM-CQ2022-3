@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +6,7 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: crypto_db
+      POSTGRES_DB: marketdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres123
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -17,7 +15,7 @@ services:
     networks:
       - crypto-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,32 +32,7 @@ services:
     networks:
       - crypto-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  mysql:
-    image: mysql:8.0
-    container_name: crypto-mysql
-    restart: unless-stopped
-    ports:
-      - "3306:3306"
-    environment:
-      MYSQL_DATABASE: crypto_db
-      MYSQL_USER: crypto_user
-      MYSQL_PASSWORD: crypto123
-      MYSQL_ROOT_PASSWORD: root123
-    command:
-      - "--default-authentication-plugin=mysql_native_password"
-      - "--character-set-server=utf8mb4"
-      - "--collation-server=utf8mb4_unicode_ci"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - crypto-network
-    healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot123 || exit 1"]
+      test: [ "CMD", "redis-cli", "-a", "redis123", "ping" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -124,13 +97,102 @@ services:
     networks:
       - crypto-network
 
+  # ============ BE Services ============
+
+  ingest-service:
+    build: ./BE/ingest-service
+    container_name: crypto-ingest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redis123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      MARKET_SERVICE_BASE_URL: http://market-service:8082/api/v1
+      JAVA_OPTS: -Xms128m -Xmx384m
+    networks:
+      - crypto-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  market-service:
+    build: ./BE/market-service
+    container_name: crypto-market
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/marketdb?TimeZone=UTC
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres123
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redis123
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JAVA_OPTS: -Xms128m -Xmx384m
+    networks:
+      - crypto-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  ws-service:
+    build: ./BE/ws-service
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: redis123
+      JAVA_OPTS: -Xms256m -Xmx512m
+    networks:
+      - crypto-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 768M
+
+  nginx:
+    image: nginx:alpine
+    container_name: crypto-nginx
+    restart: unless-stopped
+    depends_on:
+      - ws-service
+      - market-service
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - crypto-network
+
 volumes:
   postgres_data:
   redis_data:
-  mysql_data:
   zookeeper_data:
   zookeeper_logs:
   kafka_data:
+
 
 networks:
   crypto-network:

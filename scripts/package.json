@@ -1,0 +1,15 @@
+{
+  "name": "ws-stress-test",
+  "version": "1.0.0",
+  "description": "WebSocket stress test for crypto trading platform",
+  "main": "ws-stress-test.js",
+  "scripts": {
+    "test:1k": "node ws-stress-test.js 1000",
+    "test:5k": "node ws-stress-test.js 5000",
+    "test:10k": "node ws-stress-test.js 10000"
+  },
+  "dependencies": {
+    "@stomp/stompjs": "^7.0.0",
+    "sockjs-client": "^1.6.1"
+  }
+}

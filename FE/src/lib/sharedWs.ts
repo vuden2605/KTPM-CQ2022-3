@@ -6,7 +6,7 @@ type Candle = { time: number; open: number; high: number; low: number; close: nu
 
 type Listener = (c: Candle) => void;
 
-const WS_URL = 'http://localhost:8083/ws';
+const WS_URL = 'http://localhost/ws';
 
 class SharedWs {
   private client: Client | null = null;
