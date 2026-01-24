@@ -48,21 +48,39 @@ print("=" * 70)
 
 # Chọn features
 feature_cols = [
-    'sentiment_score',      # Sentiment từ FinBERT/VADER
-    'breaking_score',       # Breaking news score
-    'vol_pre_24h',        # Volatility trước tin
-    'volume_pre_24h',    # Volume trước tin
-    'baseline_ret_24h',     # Baseline return (xu hướng tự nhiên)
-    # 'ret_1h',             # Không dùng ret_1h/4h vì đó là "tương lai" tại t0
-    # 'ret_4h',             # Model chỉ được biết thông tin TẠI thời điểm tin ra
+    # Existing features (5)
+    'sentiment_score',
+    'breaking_score',
+    'vol_pre_24h',
+    'volume_pre_24h',
+    'baseline_ret_24h',
+    
+    # ===== NEW FEATURES (11) =====
+    # Technical indicators (4)
+    'rsi_24h',
+    'price_change_24h',
+    'high_low_range_24h',
+    'volume_ma_ratio',
+    
+    # Market context (3)
+    'market_cap_rank',
+    'time_of_day',
+    'day_of_week',
+    
+    # News features (4)
+    'news_count_1h',
+    'avg_sentiment_1h',
+    'entity_importance',
+    'keyword_strength',
 ]
 
-# Thêm features derived (tuỳ chọn)
+# Derived features (2)
 df['is_breaking_int'] = df['is_breaking'].astype(int)
-df['sentiment_extreme'] = np.abs(df['sentiment_score'] - 0.5)  # Độ "cực đoan" của sentiment
+df['sentiment_extreme'] = np.abs(df['sentiment_score'] - 0.5)
 
 feature_cols.extend(['is_breaking_int', 'sentiment_extreme'])
 
+# ===== TOTAL: 5 + 11 + 2 = 18 features =====
 # Target
 target_col = 'label'
 

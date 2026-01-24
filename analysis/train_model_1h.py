@@ -56,20 +56,33 @@ print("=" * 70)
 
 # ===== SỬA: Thêm baseline_ret_1h nếu có trong CSV =====
 feature_cols = [
+    # Existing
     'sentiment_score',
     'breaking_score',
-    'vol_pre_24h',          
+    'vol_pre_24h',
     'volume_pre_24h',
+    
+    # Baseline (check if exists)
+    # 'baseline_ret_1h',  # Sẽ thêm sau if exists
+    
+    # NEW (11 features)
+    'rsi_24h',
+    'price_change_24h',
+    'high_low_range_24h',
+    'volume_ma_ratio',
+    'market_cap_rank',
+    'time_of_day',
+    'day_of_week',
+    'news_count_1h',
+    'avg_sentiment_1h',
+    'entity_importance',
+    'keyword_strength',
 ]
 
-# Thêm baseline_ret_1h nếu có (sau khi align mới)
 if 'baseline_ret_1h' in df.columns:
     feature_cols.append('baseline_ret_1h')
-    print("  ✓ Using baseline_ret_1h (abnormal return approach)")
-else:
-    print("  ⚠️ baseline_ret_1h not found, using raw return approach")
 
-# Derived features
+# Derived
 df['is_breaking_int'] = df['is_breaking'].astype(int)
 df['sentiment_extreme'] = np.abs(df['sentiment_score'] - 0.5)
 

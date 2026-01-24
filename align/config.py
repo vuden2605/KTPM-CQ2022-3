@@ -1,6 +1,6 @@
 """
-Configuration file for Crypto Data Pipeline
-Copy this file and modify for your needs
+Configuration file for Crypto AI Pipeline
+Aligned with: align_pipeline.py, train_model_1h.py, train_model_24h.py, ai-service
 """
 
 # ============================================
@@ -8,14 +8,19 @@ Copy this file and modify for your needs
 # ============================================
 
 MONGODB_CONFIG = {
-    # MongoDB Atlas credentials
-    "username": "YOUR_USERNAME",  # ← Change this
-    "password": "YOUR_PASSWORD",  # ← Change this
+    # MongoDB Atlas URI (FULL)
+    "uri": "mongodb+srv://nguyenvanvu060104:cryptonews123456@cluster0.mz66r.mongodb.net/cryptonews?retryWrites=true&w=majority&appName=Cluster0&authSource=admin",
+    
+    # Or use separate fields
+    "username": "nguyenvanvu060104",
+    "password": "cryptonews123456",
     "cluster": "cluster0.mz66r.mongodb.net",
     "database": "cryptonews",
+    "app_name": "Cluster0",
     
     # Collections
     "news_collection": "News",
+    "aligned_collection": "Aligned_News_Price_Per_Article",
     "training_collection": "AI_Training_Data",
     
     # Connection settings
@@ -28,19 +33,12 @@ MONGODB_CONFIG = {
 # ============================================
 
 BINANCE_CONFIG = {
-    # API endpoint
     "base_url": "https://api.binance.com",
-    
-    # Rate limiting
     "requests_per_minute": 1200,
-    "sleep_between_requests": 0.1,  # seconds
-    
-    # Retry settings
+    "sleep_between_requests": 0.1,
     "max_retries": 5,
-    "backoff_factor": 1,  # exponential backoff multiplier
-    
-    # Request timeout
-    "timeout": 30  # seconds
+    "backoff_factor": 1,
+    "timeout": 30
 }
 
 # ============================================
@@ -48,30 +46,17 @@ BINANCE_CONFIG = {
 # ============================================
 
 DATA_CONFIG = {
-    # Default symbol and interval
     "default_symbol": "BTCUSDT",
-    "default_interval": "1h",  # 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M
-    
-    # Date range
-    "default_start_date": "2026-01-01",
+    "default_interval": "1h",
+    "default_start_date": "2025-12-01",  # ← FIXED
     "default_end_date": "2026-01-22",
     
-    # Multiple symbols for batch processing
     "symbols": [
-        "BTCUSDT",   # Bitcoin
-        "ETHUSDT",   # Ethereum
-        "BNBUSDT",   # Binance Coin
-        "ADAUSDT",   # Cardano
-        "SOLUSDT",   # Solana
-        "XRPUSDT",   # Ripple
-        "DOGEUSDT",  # Dogecoin
-        "DOTUSDT",   # Polkadot
-        "MATICUSDT", # Polygon
-        "AVAXUSDT"   # Avalanche
+        "BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "SOLUSDT",
+        "XRPUSDT", "DOGEUSDT", "DOTUSDT", "MATICUSDT", "AVAXUSDT"
     ],
     
-    # Multiple timeframes
-    "intervals": ["1h", "4h", "1d"]
+    "intervals": ["1h", "24h"]  # ← Only 1h and 24h (match with models)
 }
 
 # ============================================
@@ -79,35 +64,62 @@ DATA_CONFIG = {
 # ============================================
 
 FEATURE_CONFIG = {
-    # Price feature windows (in periods)
-    "price_windows": {
-        "short": [3, 6],      # Short-term: 3h, 6h
-        "medium": [12, 24],   # Medium-term: 12h, 24h (1 day)
-        "long": [168]         # Long-term: 168h (1 week)
-    },
+    # Basic features (existing - 7 features)
+    "basic_features": [
+        'sentiment_score',
+        'breaking_score',
+        'vol_pre_24h',
+        'volume_pre_24h',
+        'baseline_ret_1h',  # or baseline_ret_24h
+        'is_breaking_int',
+        'sentiment_extreme'
+    ],
     
-    # Sentiment feature windows
-    "sentiment_windows": {
-        "short": [3, 6],
-        "medium": [12, 24],
-        "long": [72, 168]  # 3 days, 1 week
-    },
-    
-    # Technical indicators
-    "indicators": {
+    # NEW FEATURES (11 features)
+    "new_features": {
+        # Technical indicators (4)
         "rsi_period": 14,
-        "ma_periods": [6, 24, 168],  # 6h, 1d, 1w
-        "volatility_periods": [6, 24]
+        "price_change_window": 24,
+        "high_low_range_window": 24,
+        "volume_ma_days": 7,
+        
+        # Market context (3)
+        "market_cap_ranks": {
+            'BTCUSDT': 1, 'ETHUSDT': 2, 'BNBUSDT': 3, 'SOLUSDT': 4,
+            'XRPUSDT': 5, 'ADAUSDT': 6, 'DOGEUSDT': 7, 'MATICUSDT': 8,
+            'DOTUSDT': 9, 'LTCUSDT': 10, 'AVAXUSDT': 11
+        },
+        
+        # News features (4)
+        "news_count_window": 1,
+        "avg_sentiment_window": 1,
+        
+        "entity_importance_map": {
+            'sec': 10, 'fed': 10, 'cftc': 9,
+            'blackrock': 8, 'fidelity': 8, 'grayscale': 7,
+            'coinbase': 6, 'binance': 6,
+            'elon musk': 8, 'trump': 7, 'powell': 7, 'gensler': 7
+        },
+        
+        "keyword_strength_map": {
+            'approved': 5, 'approval': 5, 'etf approved': 8,
+            'ban': 5, 'banned': 5, 'lawsuit': 4, 'hack': 6,
+            'surge': 3, 'soar': 3, 'crash': 4, 'plunge': 4,
+            'breakthrough': 5, 'adoption': 4
+        }
     },
     
-    # Target prediction horizons (hours ahead)
-    "prediction_horizons": [1, 3, 6, 24],
+    # Prediction horizons
+    "prediction_horizons": [1, 24],
     
-    # Classification thresholds
-    "price_change_thresholds": {
-        "strong_down": -0.02,  # -2%
-        "strong_up": 0.02      # +2%
-    }
+    # Classification thresholds (abnormal return based)
+    "classification_thresholds": {
+        "1h": 0.3,
+        "24h": 0.2
+    },
+    
+    # Baseline return settings
+    "baseline_days": 7,  # Use 7 days before for baseline
 }
 
 # ============================================
@@ -115,20 +127,11 @@ FEATURE_CONFIG = {
 # ============================================
 
 QUALITY_CONFIG = {
-    # Minimum samples required
     "min_samples": 100,
-    
-    # Maximum missing percentage per column
-    "max_missing_pct": 0.5,  # 50%
-    
-    # Target class balance
-    "min_class_ratio": 0.1,  # At least 10% for minority class
-    
-    # Outlier detection
-    "sentiment_score_range": (-1, 1),
-    "price_return_clip": (-0.5, 0.5),  # Clip returns at ±50%
-    
-    # Remove rows with missing targets
+    "max_missing_pct": 0.5,
+    "min_class_ratio": 0.1,
+    "sentiment_score_range": (0, 1),  # ← FIXED (0-1, not -1 to 1)
+    "price_return_clip": (-0.5, 0.5),
     "drop_missing_targets": True
 }
 
@@ -137,21 +140,15 @@ QUALITY_CONFIG = {
 # ============================================
 
 OUTPUT_CONFIG = {
-    # Save options
     "save_to_csv": True,
     "save_to_mongodb": True,
-    "save_to_parquet": False,  # More efficient for large datasets
+    "save_to_parquet": False,
     
-    # Output directory
-    "output_dir": "./training_data",
+    "output_dir": "./analysis",  # ← Match folder structure
+    "csv_compression": None,
     
-    # CSV options
-    "csv_compression": None,  # None, 'gzip', 'bz2', 'zip', 'xz'
+    "filename_template": "aligned_news_price_per_article_{start_date}_to_{end_date}",
     
-    # File naming
-    "filename_template": "training_data_{symbol}_{interval}_{start_date}_to_{end_date}",
-    
-    # MongoDB batch insert size
     "mongodb_batch_size": 1000
 }
 
@@ -160,11 +157,9 @@ OUTPUT_CONFIG = {
 # ============================================
 
 LOGGING_CONFIG = {
-    "level": "INFO",  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    "level": "INFO",
     "format": "%(asctime)s - %(levelname)s - %(message)s",
     "date_format": "%Y-%m-%d %H:%M:%S",
-    
-    # Save logs to file
     "save_to_file": True,
     "log_file": "pipeline.log",
     "log_rotation": True,
@@ -172,67 +167,74 @@ LOGGING_CONFIG = {
 }
 
 # ============================================
-# ADVANCED SETTINGS
+# MODEL TRAINING SETTINGS
 # ============================================
 
-ADVANCED_CONFIG = {
-    # Parallel processing
-    "enable_multiprocessing": False,
-    "num_workers": 4,
+MODEL_CONFIG = {
+    # Models to train
+    "models": {
+        "random_forest": {
+            "n_estimators": 200,
+            "max_depth": 10,
+            "min_samples_split": 10,
+            "min_samples_leaf": 5,
+            "class_weight": "balanced"
+        },
+        
+        "gradient_boosting": {
+            "n_estimators": 100,
+            "max_depth": 5,
+            "learning_rate": 0.1
+        },
+        
+        "xgboost": {
+            "n_estimators": 200,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8
+        }
+    },
     
-    # Memory management
-    "chunk_size": 10000,  # Process data in chunks
-    "low_memory_mode": False,
+    # Train/val/test split
+    "test_size": 0.15,
+    "val_size": 0.176,  # ~15% of train+val
     
-    # Caching
-    "cache_binance_data": True,
-    "cache_dir": "./cache",
-    "cache_expiry_hours": 24,
+    # Model save path
+    "model_dir": "./analysis/models",
     
-    # Feature selection
-    "auto_feature_selection": False,
-    "feature_importance_threshold": 0.01,
-    
-    # Data validation
-    "strict_validation": True,
-    "auto_fix_issues": True
+    # Feature importance threshold
+    "feature_importance_threshold": 0.01
 }
 
 # ============================================
-# EXPERIMENTAL FEATURES
+# AI SERVICE SETTINGS
 # ============================================
 
-EXPERIMENTAL_CONFIG = {
-    # Technical indicators
-    "enable_advanced_indicators": False,
-    "indicators_list": [
-        "MACD", "Bollinger Bands", "Stochastic", "ATR"
-    ],
+AI_SERVICE_CONFIG = {
+    # Service config
+    "host": "0.0.0.0",
+    "port": 8003,
     
-    # Sentiment analysis
-    "enable_sentiment_nlp": False,
-    "sentiment_model": "distilbert-base-uncased",
+    # CORS
+    "allowed_origins": ["*"],
     
-    # Time-based features
-    "enable_temporal_features": True,
-    "temporal_features": [
-        "hour_of_day",
-        "day_of_week",
-        "is_weekend",
-        "is_us_trading_hours"
-    ],
+    # Ollama (LLM explanation)
+    "ollama": {
+        "enabled": True,
+        "api_url": "http://localhost:11434/api/generate",
+        "model": "llama3.2:3b",
+        "temperature": 0.3,
+        "max_tokens": 250
+    },
     
-    # External data sources
-    "enable_external_data": False,
-    "external_sources": [
-        "google_trends",
-        "twitter_sentiment",
-        "reddit_sentiment"
-    ]
+    # Prediction settings
+    "default_hours": 1,  # Fetch news from last N hours
+    "max_news_analyze": 100,  # Max news to analyze per request
 }
 
 # ============================================
-# PRESET CONFIGURATIONS
+# PRESETS
 # ============================================
 
 PRESETS = {
@@ -248,7 +250,7 @@ PRESETS = {
     "full_training": {
         "symbol": "BTCUSDT",
         "interval": "1h",
-        "start_date": "2025-01-01",
+        "start_date": "2025-12-01",
         "end_date": "2026-01-22",
         "save_to_mongodb": True,
         "save_to_csv": True
@@ -257,48 +259,14 @@ PRESETS = {
     "multi_symbol": {
         "symbols": ["BTCUSDT", "ETHUSDT", "BNBUSDT"],
         "interval": "1h",
-        "start_date": "2026-01-01",
+        "start_date": "2025-12-01",
         "end_date": "2026-01-22"
     },
     
     "multi_timeframe": {
         "symbol": "BTCUSDT",
-        "intervals": ["1h", "4h", "1d"],
-        "start_date": "2026-01-01",
+        "intervals": ["1h", "24h"],
+        "start_date": "2025-12-01",
         "end_date": "2026-01-22"
     }
 }
-
-# ============================================
-# USAGE EXAMPLES
-# ============================================
-
-"""
-# Example 1: Quick test
-from crypto_data_pipeline import run_pipeline
-from config import PRESETS
-
-df = run_pipeline(**PRESETS["quick_test"])
-
-# Example 2: Custom configuration
-df = run_pipeline(
-    symbol="ETHUSDT",
-    interval="4h",
-    start_date="2025-06-01",
-    end_date="2026-01-22",
-    save_to_mongodb=True,
-    save_to_csv=True
-)
-
-# Example 3: Batch processing multiple symbols
-from config import DATA_CONFIG
-
-for symbol in DATA_CONFIG["symbols"]:
-    df = run_pipeline(
-        symbol=symbol,
-        interval="1h",
-        start_date="2026-01-01",
-        end_date="2026-01-22"
-    )
-    print(f"Completed {symbol}: {len(df)} samples")
-"""

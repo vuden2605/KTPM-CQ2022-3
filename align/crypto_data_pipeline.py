@@ -364,17 +364,16 @@ def classify_label(abret: Optional[float], threshold: float = 0.2) -> str:
 # ============================================
 # ALIGN NEWS + PRICE (PER NEWS)
 # ============================================
-
 def align_news_price_per_article(
     df_news: pd.DataFrame,
     price_data: Dict[str, pd.DataFrame]
 ) -> pd.DataFrame:
     """
-    Align mỗi tin với price metrics (SIMPLIFIED - NO EVENT STUDY)
+    Align mỗi tin với price metrics (ENHANCED WITH 11 NEW FEATURES)
     - Mỗi tin có nhiều rows (1 cho BTC + các symbols khác)
     - Tính baseline return & abnormal return
     - Classify label (UP/DOWN/NEUTRAL)
-    - BỎ: vol_post, vol_ratio, volume_post, volume_change, max_runup/drawdown
+    - THÊM: 11 features mới (technical indicators, market context, news features)
     """
     aligned_rows = []
     
@@ -411,6 +410,61 @@ def align_news_price_per_article(
             'is_breaking': news_row['is_breaking'],
         }
         
+        # ===== NEWS FEATURES (TÍNH 1 LẦN CHO TẤT CẢ SYMBOLS) =====
+        
+        # 8. News count 1h trước
+        news_1h_before = df_news[
+            (df_news['timestamp'] >= news_time - timedelta(hours=1)) &
+            (df_news['timestamp'] < news_time)
+        ]
+        news_count_1h = len(news_1h_before)
+        
+        # 9. Avg sentiment 1h trước
+        if news_count_1h > 0:
+            avg_sentiment_1h = news_1h_before['sentiment_score'].mean()
+        else:
+            avg_sentiment_1h = 0.5
+        
+        # 10 & 11. Entity importance & Keyword strength
+        title = news_row['title']
+        
+        # Extract entities (simple version - không cần import nếu chưa có function)
+        ENTITY_IMPORTANCE = {
+            'sec': 10, 'fed': 10, 'cftc': 9,
+            'blackrock': 8, 'fidelity': 8, 'grayscale': 7,
+            'coinbase': 6, 'binance': 6,
+            'elon musk': 8, 'musk': 8, 'trump': 7, 'powell': 7, 'gensler': 7
+        }
+        
+        entity_importance = 0
+        title_lower = title.lower()
+        for entity, score in ENTITY_IMPORTANCE.items():
+            if entity in title_lower:
+                entity_importance += score
+        entity_importance = min(entity_importance, 20)
+        
+        # Extract keywords
+        KEYWORD_STRENGTH = {
+            'approved': 5, 'approval': 5, 'etf approved': 8,
+            'ban': 5, 'banned': 5, 'lawsuit': 4, 'hack': 6,
+            'surge': 3, 'soar': 3, 'crash': 4, 'plunge': 4,
+            'breakthrough': 5, 'adoption': 4
+        }
+        
+        keyword_strength = 0
+        for keyword, score in KEYWORD_STRENGTH.items():
+            if keyword in title_lower:
+                keyword_strength += score
+        keyword_strength = min(keyword_strength, 20)
+        
+        # ===== MARKET CONTEXT (TÍNH 1 LẦN) =====
+        
+        # 6. Time of day (0-23 UTC)
+        time_of_day = news_time.hour
+        
+        # 7. Day of week (0=Mon, 6=Sun)
+        day_of_week = news_time.weekday()
+        
         # Tạo row cho mỗi symbol
         for symbol in sorted(symbols_to_process):
             df_price = price_data.get(symbol, pd.DataFrame())
@@ -431,41 +485,92 @@ def align_news_price_per_article(
             pre_data = df_price[(df_price.index >= pre_start) & (df_price.index < news_time)]
             volume_pre = pre_data['volume'].sum() if not pre_data.empty else None
             
+            # ===== NEW FEATURES: TECHNICAL INDICATORS =====
+            
+            # 1. RSI 24h
+            if len(pre_data) >= 15:
+                prices = pre_data['close'].values
+                deltas = np.diff(prices)
+                gains = np.where(deltas > 0, deltas, 0)
+                losses = np.where(deltas < 0, -deltas, 0)
+                
+                avg_gain = np.mean(gains[-14:]) if len(gains) >= 14 else 0
+                avg_loss = np.mean(losses[-14:]) if len(losses) >= 14 else 0
+                
+                if avg_loss == 0:
+                    rsi_24h = 100.0
+                else:
+                    rs = avg_gain / avg_loss
+                    rsi_24h = 100 - (100 / (1 + rs))
+            else:
+                rsi_24h = 50.0  # Neutral
+            
+            # 2. Price change 24h
+            if len(pre_data) >= 2:
+                price_start_24h = pre_data.iloc[0]['close']
+                price_end_24h = pre_data.iloc[-1]['close']
+                price_change_24h = (price_end_24h - price_start_24h) / price_start_24h * 100
+            else:
+                price_change_24h = 0.0
+            
+            # 3. High-Low range 24h
+            if len(pre_data) >= 1:
+                high_24h = pre_data['high'].max()
+                low_24h = pre_data['low'].min()
+                high_low_range_24h = (high_24h - low_24h) / low_24h * 100 if low_24h > 0 else 0.0
+            else:
+                high_low_range_24h = 0.0
+            
+            # 4. Volume MA ratio
+            ma_start = news_time - timedelta(days=7)
+            candles_7d = df_price[(df_price.index >= ma_start) & (df_price.index < news_time)]
+            
+            if len(candles_7d) >= 1:
+                volume_ma_7d = candles_7d['volume'].mean()
+                if volume_ma_7d > 0 and volume_pre is not None:
+                    volume_ma_ratio = volume_pre / (volume_ma_7d * 24)  # Normalize by 24h
+                else:
+                    volume_ma_ratio = 1.0
+            else:
+                volume_ma_ratio = 1.0
+            
+            # 5. Market cap rank (hardcoded)
+            MARKET_CAP_RANKS = {
+                'BTCUSDT': 1, 'ETHUSDT': 2, 'BNBUSDT': 3, 'SOLUSDT': 4,
+                'XRPUSDT': 5, 'ADAUSDT': 6, 'DOGEUSDT': 7, 'MATICUSDT': 8,
+                'DOTUSDT': 9, 'LTCUSDT': 10
+            }
+            market_cap_rank = MARKET_CAP_RANKS.get(symbol, 50)
+            
             # ===== CAUSAL METRICS (24H) =====
-            # Baseline return 24h
             baseline_ret_24h = calculate_baseline_return(
                 df_price, news_time, horizon_hours=24, baseline_days=7
             )
 
-            # Abnormal return 24h
             if ret_24h is not None and baseline_ret_24h is not None:
                 abret_24h = ret_24h - baseline_ret_24h
             else:
                 abret_24h = None
 
-            # Label 24h (dựa trên abret_24h)
             label_24h = classify_label(abret_24h, threshold=0.2)
 
             # ===== CAUSAL METRICS (1H) =====
-            # Baseline return 1h
             baseline_ret_1h = calculate_baseline_return(
                 df_price, news_time, horizon_hours=1, baseline_days=7
             )
 
-            # Abnormal return 1h
             if ret_1h is not None and baseline_ret_1h is not None:
                 abret_1h = ret_1h - baseline_ret_1h
             else:
                 abret_1h = None
 
-            # Label 1h (threshold lớn hơn vì 1h biến động nhỏ)
             label_1h = classify_label(abret_1h, threshold=0.3)
             
             # Skip nếu không có data cơ bản
             if ret_1h is None and ret_4h is None and ret_24h is None:
                 continue
             
-            # Tạo row
+            # ===== TẠO ROW (THÊM 11 FEATURES MỚI) =====
             row = base_info.copy()
             row.update({
                 'symbol': symbol,
@@ -476,6 +581,8 @@ def align_news_price_per_article(
                 'ret_1h': ret_1h,
                 'ret_4h': ret_4h,
                 'ret_24h': ret_24h,
+                
+                # Existing features (5)
                 'vol_pre_24h': vol_pre,
                 'volume_pre_24h': volume_pre,
                 'baseline_ret_24h': baseline_ret_24h,
@@ -484,7 +591,25 @@ def align_news_price_per_article(
                 'baseline_ret_1h': baseline_ret_1h,
                 'abret_1h': abret_1h,
                 'label_1h': label_1h,
-                'label': label_24h,  # Backward compatibility
+                'label': label_24h,
+                
+                # ===== NEW FEATURES (11) =====
+                # Technical indicators (4)
+                'rsi_24h': rsi_24h,
+                'price_change_24h': price_change_24h,
+                'high_low_range_24h': high_low_range_24h,
+                'volume_ma_ratio': volume_ma_ratio,
+                
+                # Market context (3)
+                'market_cap_rank': market_cap_rank,
+                'time_of_day': time_of_day,
+                'day_of_week': day_of_week,
+                
+                # News features (4)
+                'news_count_1h': news_count_1h,
+                'avg_sentiment_1h': avg_sentiment_1h,
+                'entity_importance': entity_importance,
+                'keyword_strength': keyword_strength,
             })
             
             aligned_rows.append(row)
@@ -495,6 +620,7 @@ def align_news_price_per_article(
     df_aligned = df_aligned.sort_values(['news_timestamp', 'symbol']).reset_index(drop=True)
     
     logger.info(f"✓ Aligned {len(df_aligned)} rows from {total_news} news articles")
+    logger.info(f"✓ Total columns: {len(df_aligned.columns)} (including 11 new features)")
     
     return df_aligned
 # ============================================
