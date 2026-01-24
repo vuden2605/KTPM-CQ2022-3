@@ -35,13 +35,10 @@ const connectTime = new Trend('connect_time');
 export const options = {
   // Define stages to simulate ramping up traffic
   stages: [
-    { duration: '30s', target: 1000 },  // Ramp up to 1000 users
-    { duration: '1m', target: 1000 },   // Stay at 1000
-    { duration: '30s', target: 2500 },  // Ramp up to 2500
-    { duration: '1m', target: 2500 },   // Stay at 2500
-    { duration: '30s', target: 5000 },  // Ramp up to 5000
-    { duration: '1m', target: 5000 },   // Stay at 5000
-    { duration: '30s', target: 0 },     // Scale down
+    { duration: '30s', target: 50 },    // Ramp up slowly
+    { duration: '30s', target: 500 },   // Ramp up to 500
+    { duration: '3m', target: 1000 },   // Stay at 1000 (Longer duration to ensure all connect)
+    { duration: '20s', target: 0 },     // Scale down
   ],
 };
 
