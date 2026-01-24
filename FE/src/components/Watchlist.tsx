@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { priceStore } from '../lib/priceStore';
+import { MetricsPanel } from './MetricsPanel';
 import '../styles/Watchlist.css';
 
 interface WatchSymbol {
@@ -16,6 +17,12 @@ interface WatchSymbol {
 interface WatchlistProps {
   onSymbolSelect: (symbol: string) => void;
   selectedSymbol: string;
+  metrics?: {
+    messagesPerSec: number;
+    bufferSize: number;
+    dropped: number;
+    fps: number;
+  };
 }
 
 interface ViewSettings {
@@ -56,7 +63,7 @@ const INITIAL_SYMBOLS: WatchSymbol[] = [
   { code: 'XRPUSDT', name: 'XRP / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
 ];
 
-export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
+export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: WatchlistProps) => {
   const [symbols, setSymbols] = useState<WatchSymbol[]>(INITIAL_SYMBOLS);
   const [width, setWidth] = useState(() => {
     const saved = localStorage.getItem('watchlistWidth');
@@ -194,8 +201,6 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
       return prev;
     });
   };
-
-
 
   return (
     <div
@@ -376,6 +381,12 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
           </div>
         ))}
       </div>
+
+      {metrics && (
+        <div className="watchlist-footer">
+          <MetricsPanel {...metrics} />
+        </div>
+      )}
     </div>
   );
 };

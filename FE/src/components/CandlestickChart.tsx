@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart } from 'lightweight-charts';
 import type { CandlestickData, Time } from 'lightweight-charts';
-import { MetricsPanel } from './MetricsPanel';
 import { sharedWs } from '../lib/sharedWs';
 
 interface CandlestickChartProps {
@@ -10,21 +9,16 @@ interface CandlestickChartProps {
   intervalSeconds?: number;
   /** if true, do not subscribe to backend WS and use mock-only mode */
   useMockOnly?: boolean;
+  onMetricsUpdate?: (metrics: { messagesPerSec: number; bufferSize: number; dropped: number; fps: number }) => void;
 }
 
-export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false }: CandlestickChartProps) => {
+export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false, onMetricsUpdate }: CandlestickChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
   const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
-
-  // Metrics state
-  const [messagesPerSec, setMessagesPerSec] = useState(0);
-  const [bufferSize, setBufferSize] = useState(0);
-  const [dropped, setDropped] = useState(0);
-  const [fps, setFps] = useState(0);
   const [hover, setHover] = useState<{
     time?: number | null;
     open?: number | null;
@@ -515,16 +509,23 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     }
 
     // Metrics update intervals
-    const msgInterval = setInterval(() => {
-      setMessagesPerSec(messagesInRef.current);
-      messagesInRef.current = 0;
-    }, 1000);
-
     const metricsInterval = setInterval(() => {
-      setBufferSize(incomingBufferRef.current.length);
-      setDropped(droppedRef.current);
-      setFps(frameCountRef.current);
+      const msgs = messagesInRef.current;
+      messagesInRef.current = 0;
+
+      const buf = incomingBufferRef.current.length;
+      const drp = droppedRef.current;
+      const fps = frameCountRef.current;
       frameCountRef.current = 0;
+
+      if (onMetricsUpdate) {
+        onMetricsUpdate({
+          messagesPerSec: msgs,
+          bufferSize: buf,
+          dropped: drp,
+          fps: fps
+        });
+      }
     }, 1000);
 
     return () => {
@@ -561,7 +562,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      clearInterval(msgInterval);
       clearInterval(metricsInterval);
 
       // finally remove chart instance
@@ -578,14 +578,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         position: 'relative'
       }}
     >
-      <MetricsPanel messagesPerSec={messagesPerSec} bufferSize={bufferSize} dropped={dropped} fps={fps} />
       {/* Hover OHLCV overlay */}
-      <div style={{ position: 'absolute', left: 16, top: 10, zIndex: 40, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', left: 16, top: 10, zIndex: 40, pointerEvents: 'none', maxWidth: 'calc(100% - 100px)' }}>
         <div style={{
           color: '#d1d4dc',
           fontSize: 12,
           display: 'flex',
-          gap: 16,
+          gap: 12, /* Reduced gap to fit more */
+          flexWrap: 'wrap', /* Allow wrapping */
           fontFamily: 'JetBrains Mono, monospace'
         }}>
           <span style={{ fontWeight: 600, color: '#d1d4dc' }}>{symbol.toUpperCase()}</span>

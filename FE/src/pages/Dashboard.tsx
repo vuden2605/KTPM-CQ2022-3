@@ -41,6 +41,9 @@ export const Dashboard = () => {
     return map[label] ?? 86400;
   };
 
+  // Metrics state lifted from CandlestickChart
+  const [metrics, setMetrics] = useState({ messagesPerSec: 0, bufferSize: 0, dropped: 0, fps: 0 });
+
   return (
     <div className="app">
       {/* Full-width header */}
@@ -92,11 +95,16 @@ export const Dashboard = () => {
             </div>
           </div>
 
-          <CandlestickChart symbol={selectedSymbol} intervalSeconds={labelToSeconds(intervalLabel)} />
+          <CandlestickChart
+            symbol={selectedSymbol}
+            intervalSeconds={labelToSeconds(intervalLabel)}
+            onMetricsUpdate={setMetrics}
+          />
         </div>
         <Watchlist
           onSymbolSelect={setSelectedSymbol}
           selectedSymbol={selectedSymbol}
+          metrics={metrics}
         />
       </div>
     </div>

@@ -1,28 +1,17 @@
-.metrics-panel {
-  position: absolute;
-  right: 80px;
-  top: 12px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #e6eef6;
-  padding: 6px 12px;
-  border-radius: 6px;
+/* Metrics Panel Styles - Footer Mode */
+.metrics-panel-overlay {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  display: flex;
-  gap: 16px;
-  z-index: 30;
+  font-family: 'JetBrains Mono', monospace;
+  color: #787b86;
+  background: transparent;
+  pointer-events: auto;
 }
 
-.metrics-row {
-  display: flex;
-  gap: 4px;
-}
-
-.metrics-row strong {
-  color: #9fb3d0;
-}
-
-.metrics-row span {
-  font-weight: 600;
+.metrics-panel-overlay span {
+  white-space: nowrap;
 }
