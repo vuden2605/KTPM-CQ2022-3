@@ -580,18 +580,43 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     >
       <MetricsPanel messagesPerSec={messagesPerSec} bufferSize={bufferSize} dropped={dropped} fps={fps} />
       {/* Hover OHLCV overlay */}
-      <div style={{ position: 'absolute', left: 12, top: 12, zIndex: 40 }}>
-        {hover && hover.time ? (
-          <div style={{ background: 'rgba(20,24,30,0.9)', color: '#d1d4dc', padding: '6px 8px', borderRadius: 6, minWidth: 140, maxWidth: 180, width: 'auto', fontSize: 11, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
-            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>{symbol.toUpperCase()}</div>
-            <div style={{ marginBottom: 6, fontSize: 11 }}>Time: {new Date((hover.time as number) * 1000).toLocaleString()}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>O:</div><div>{typeof hover.open === 'number' ? hover.open.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>H:</div><div>{typeof hover.high === 'number' ? hover.high.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>L:</div><div>{typeof hover.low === 'number' ? hover.low.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>C:</div><div>{typeof hover.close === 'number' ? hover.close.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>V:</div><div>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(4) : '-'} {typeof (hover as any).vPercent === 'number' ? '(' + ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%)' : ''}</div></div>
-          </div>
-        ) : null}
+      <div style={{ position: 'absolute', left: 16, top: 10, zIndex: 40, pointerEvents: 'none' }}>
+        <div style={{
+          color: '#d1d4dc',
+          fontSize: 12,
+          display: 'flex',
+          gap: 16,
+          fontFamily: 'JetBrains Mono, monospace'
+        }}>
+          <span style={{ fontWeight: 600, color: '#d1d4dc' }}>{symbol.toUpperCase()}</span>
+
+          {hover && hover.time ? (
+            <>
+              <span style={{ color: '#787b86' }}>
+                O <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.open === 'number' ? hover.open.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                H <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.high === 'number' ? hover.high.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                L <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.low === 'number' ? hover.low.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                C <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.close === 'number' ? hover.close.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                Vol <span className={(hover as any).vChange >= 0 ? 'text-up' : 'text-down'}>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(2) : '-'} ({typeof (hover as any).vPercent === 'number' ? ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%' : ''})</span>
+              </span>
+            </>
+          ) : (
+            <span style={{ color: '#787b86' }}>Moving cursor to see data</span>
+          )}
+        </div>
+
+        <style>{`
+            .text-up { color: #26a69a; }
+            .text-down { color: #ef5350; }
+          `}</style>
       </div>
     </div>
   );

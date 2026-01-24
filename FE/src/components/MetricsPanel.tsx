@@ -10,11 +10,22 @@ interface Props {
 
 export const MetricsPanel: React.FC<Props> = ({ messagesPerSec, bufferSize, dropped, fps }) => {
   return (
-    <div className="metrics-panel">
-      <div className="metrics-row"><strong>Msgs/s:</strong> <span>{messagesPerSec}</span></div>
-      <div className="metrics-row"><strong>Buffer:</strong> <span>{bufferSize}</span></div>
-      <div className="metrics-row"><strong>Dropped:</strong> <span>{dropped}</span></div>
-      <div className="metrics-row"><strong>FPS:</strong> <span>{fps}</span></div>
+    <div style={{
+      position: 'absolute',
+      right: 80, /* Shifted left to avoid covering chart Y-axis */
+      top: 10,
+      zIndex: 40,
+      display: 'flex',
+      gap: 12,
+      fontSize: 12,
+      fontFamily: 'JetBrains Mono, monospace',
+      color: '#787b86',
+      pointerEvents: 'none'
+    }}>
+      <div style={{ display: 'flex', gap: 4 }}><span>Msgs/s:</span><span style={{ color: '#d1d4dc' }}>{messagesPerSec}</span></div>
+      <div style={{ display: 'flex', gap: 4 }}><span>Buffer:</span><span style={{ color: '#d1d4dc' }}>{bufferSize}</span></div>
+      <div style={{ display: 'flex', gap: 4 }}><span>Drop:</span><span style={{ color: dropped > 0 ? '#ef5350' : '#d1d4dc' }}>{dropped}</span></div>
+      <div style={{ display: 'flex', gap: 4 }}><span>FPS:</span><span style={{ color: '#d1d4dc' }}>{fps}</span></div>
     </div>
   );
 };

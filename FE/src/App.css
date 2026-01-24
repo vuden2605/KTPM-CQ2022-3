@@ -17,8 +17,8 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #1e222d;
-  color: #d1d4dc;
+  background: var(--bg-panel);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
@@ -29,8 +29,8 @@ body {
   align-items: center;
   padding: 0 16px;
   height: 50px;
-  background: #131722;
-  border-bottom: 1px solid #2b2f3a;
+  background: var(--bg-app);
+  border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
@@ -40,7 +40,7 @@ body {
   gap: 10px;
   font-size: 18px;
   font-weight: 700;
-  color: #d1d4dc;
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 
@@ -74,9 +74,9 @@ body {
   display: flex;
   align-items: center;
   height: 48px;
-  background: #1e222d;
-  border-bottom: 1px solid #2b2f3a;
-  padding: 0 16px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-color);
+  padding: 12px 16px;
   gap: 16px;
 }
 
@@ -89,23 +89,23 @@ body {
 .symbol-name {
   font-size: 16px;
   font-weight: 600;
-  color: #d1d4dc;
+  color: var(--text-primary);
 }
 
 .connection-status {
   font-size: 10px;
-  color: #26a69a;
+  color: var(--color-up);
 }
 
 .divider-vertical {
   width: 1px;
   height: 20px;
-  background: #2b2f3a;
+  background: var(--border-color);
 }
 
 .interval-selector {
   display: flex;
-  gap: 4px;
+  gap: 8px;
 }
 
 .chart-tools-right {
@@ -117,7 +117,7 @@ body {
 .logout-btn {
   background: transparent;
   border: none;
-  color: #787b86;
+  color: var(--text-secondary);
   padding: 8px 12px;
   border-radius: 4px;
   cursor: pointer;
@@ -126,39 +126,41 @@ body {
   align-items: center;
   font-size: 13px;
   font-weight: 500;
+  font-family: var(--font-base);
 }
 
 .logout-btn:hover {
-  background: #2b2f3a;
-  color: #d1d4dc;
+  background: var(--border-color);
+  color: var(--text-primary);
 }
 
 .interval-btn {
   background: transparent;
-  border: none;
-  color: #787b86;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
   padding: 4px 10px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
   transition: all 0.2s;
+  font-family: var(--font-base);
 }
 
 .interval-btn:hover {
-  color: #d1d4dc;
+  color: var(--text-primary);
   background: rgba(43, 47, 58, 0.5);
 }
 
 .interval-btn.active {
-  color: #2962ff;
+  color: var(--color-accent);
   background: rgba(41, 98, 255, 0.1);
 }
 
 .tool-btn {
   background: transparent;
   border: none;
-  color: #787b86;
+  color: var(--text-secondary);
   padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
@@ -167,6 +169,6 @@ body {
 }
 
 .tool-btn:hover {
-  color: #d1d4dc;
+  color: var(--text-primary);
   background: rgba(43, 47, 58, 0.5);
 }

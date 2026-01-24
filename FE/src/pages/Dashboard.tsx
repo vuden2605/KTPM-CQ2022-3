@@ -69,25 +69,26 @@ export const Dashboard = () => {
       <div className="app-content">
         <div className="chart-container">
           {/* Chart Toolbar */}
-          <div className="chart-toolbar">
-            <div className="symbol-info">
-              <span className="symbol-name">{selectedSymbol}</span>
-              <span className="connection-status" title="Connected via WebSocket">●</span>
+          <div className="chart-toolbar" style={{ justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div className="symbol-info">
+                <span className="symbol-name" style={{ fontWeight: 700, fontSize: 16 }}>{selectedSymbol}</span>
+                <span className="connection-status" title="Connected via WebSocket" style={{ color: '#26a69a', fontSize: 12 }}>●</span>
+              </div>
             </div>
-            <div className="divider-vertical"></div>
-            <div className="interval-selector">
-              {['1m', '5m', '15m', '1h', '4h', '1d'].map((lbl) => (
-                <button
-                  key={lbl}
-                  className={`interval-btn ${intervalLabel === lbl ? 'active' : ''}`}
-                  onClick={() => setIntervalLabel(lbl)}
-                >
-                  {lbl.toUpperCase()}
-                </button>
-              ))}
-            </div>
-            <div className="divider-vertical"></div>
-            <div className="chart-tools-right">
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div className="interval-selector">
+                {['1m', '5m', '15m', '1h', '4h', '1d'].map((lbl) => (
+                  <button
+                    key={lbl}
+                    className={`interval-btn ${intervalLabel === lbl ? 'active' : ''}`}
+                    onClick={() => setIntervalLabel(lbl)}
+                  >
+                    {lbl.toUpperCase()}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
