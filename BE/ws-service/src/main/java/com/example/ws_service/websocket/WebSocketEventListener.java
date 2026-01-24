@@ -18,14 +18,14 @@ public class WebSocketEventListener {
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
         int current = activeConnections.incrementAndGet();
         // Reduce log noise: only log every 500th connection
-        if (current % 500 == 0) {
-            log.info("🔥 [LOAD-TEST] Active Users Reached: {} (Instance: {})", current, System.getenv("HOSTNAME"));
+        if (current % 10 == 0) {
+            log.info("[LOAD-TEST] Active Users Reached: {} (Instance: {})", current, System.getenv("HOSTNAME"));
         }
     }
 
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
-        int active = activeConnections.decrementAndGet();
+        activeConnections.decrementAndGet();
         // optional: log disconnects sparingly too
     }
 }
