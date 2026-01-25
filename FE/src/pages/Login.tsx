@@ -26,7 +26,7 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:8082';
+      const API_BASE = import.meta.env.VITE_API_BASE;
       const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
