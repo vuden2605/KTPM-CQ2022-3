@@ -7,10 +7,8 @@ import com.example.market_service.dto.response.UserResponse;
 import com.example.market_service.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
@@ -32,5 +30,13 @@ public class UserController {
 				.data(userService.createUser(request))
 				.build();
 	}
+	@PutMapping("/upgrade-vip")
+	public ApiResponse<UserResponse> upgradeToVip () {
+		Long userId = Long.parseLong(SecurityContextHolder.getContext().getAuthentication().getName());
+		return ApiResponse.<UserResponse>builder()
+				.message("User upgraded to VIP successfully")
+				.data(userService.upToVip(userId))
+				.build();
 
+	}
 }

@@ -7,6 +7,7 @@ import com.example.market_service.dto.request.GoogleUserCreationRequest;
 import com.example.market_service.dto.request.UserCreationRequest;
 import com.example.market_service.dto.response.UserResponse;
 import com.example.market_service.entity.User;
+import com.example.market_service.enums.Role;
 import com.example.market_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,5 +36,10 @@ public class UserService {
 		User user = userMapper.toEntity(request);
 		return userMapper.toResponse(userRepository.save(user));
 	}
-
+	public UserResponse upToVip(Long userId) {
+		User user = userRepository.findById(userId)
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+		user.setRole(Role.VIP);
+		return userMapper.toResponse(userRepository.save(user));
+	}
 }
