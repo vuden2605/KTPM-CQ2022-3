@@ -1,6 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { priceStore } from '../lib/priceStore';
+import { MetricsPanel } from './MetricsPanel';
 import '../styles/Watchlist.css';
+import { getCryptoIcon } from './CryptoIcons';
+import { AddSymbolModal } from './AddSymbolModal';
 
 interface WatchSymbol {
   code: string;
@@ -16,6 +19,12 @@ interface WatchSymbol {
 interface WatchlistProps {
   onSymbolSelect: (symbol: string) => void;
   selectedSymbol: string;
+  metrics?: {
+    messagesPerSec: number;
+    bufferSize: number;
+    dropped: number;
+    fps: number;
+  };
 }
 
 interface ViewSettings {
@@ -56,7 +65,7 @@ const INITIAL_SYMBOLS: WatchSymbol[] = [
   { code: 'XRPUSDT', name: 'XRP / USDT', price: 0, change: 0, changePercent: 0, volume: 0, type: 'crypto' },
 ];
 
-export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) => {
+export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: WatchlistProps) => {
   const [symbols, setSymbols] = useState<WatchSymbol[]>(INITIAL_SYMBOLS);
   const [width, setWidth] = useState(() => {
     const saved = localStorage.getItem('watchlistWidth');
@@ -68,6 +77,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
   });
   const [menuOpen, setMenuOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -136,7 +146,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const deltaX = startX - moveEvent.clientX;
-      const newWidth = Math.min(Math.max(startWidth + deltaX, 250), 500);
+      const newWidth = Math.min(Math.max(startWidth + deltaX, 250), 800);
       setWidth(newWidth);
     };
 
@@ -151,14 +161,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
   }, [width]);
 
   const getSymbolIcon = (code: string) => {
-    const iconMap: Record<string, string> = {
-      'BTCUSDT': '₿',
-      'BTCUSD': '₿',
-      'ETHUSDT': 'Ξ',
-      'BNBUSDT': '◈',
-      'XRPUSDT': '✕',
-    };
-    return iconMap[code] || '₿';
+    return getCryptoIcon(code, 24);
   };
 
   const formatPrice = (price: number, code: string) => {
@@ -171,10 +174,10 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
 
   const formatVolume = (volume: number | undefined) => {
     if (!volume || volume === 0) return '—';
-    if (volume >= 1e9) return (volume / 1e9).toFixed(2) + 'B';
-    if (volume >= 1e6) return (volume / 1e6).toFixed(2) + 'M';
-    if (volume >= 1e3) return (volume / 1e3).toFixed(2) + 'K';
-    return volume.toFixed(2);
+    if (volume >= 1e9) return (volume / 1e9).toFixed(4) + 'B';
+    if (volume >= 1e6) return (volume / 1e6).toFixed(4) + 'M';
+    if (volume >= 1e3) return (volume / 1e3).toFixed(4) + 'K';
+    return volume.toFixed(4);
   };
 
   const toggleViewSetting = (category: keyof ViewSettings, key?: string) => {
@@ -195,7 +198,29 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
     });
   };
 
-  const selectedSymbolData = symbols.find((s) => s.code === selectedSymbol);
+  const handleToggleSymbol = (symbolCode: string) => {
+    setSymbols(prev => {
+      const exists = prev.find(s => s.code === symbolCode);
+      if (exists) {
+        // Remove
+        return prev.filter(s => s.code !== symbolCode);
+      } else {
+        // Add
+        const newSymbol: WatchSymbol = {
+          code: symbolCode,
+          name: `${symbolCode.replace('USDT', '')} / USDT`,
+          price: 0,
+          change: 0,
+          changePercent: 0,
+          volume: 0,
+          type: 'crypto'
+        };
+        // Subscribe
+        priceStore.subscribe(symbolCode);
+        return [...prev, newSymbol];
+      }
+    });
+  };
 
   return (
     <div
@@ -213,6 +238,13 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
       <div className="watchlist-header">
         <h3>Danh sách theo dõi (Crypto)</h3>
         <div className="header-actions">
+          <button
+            className="add-symbol-btn"
+            onClick={() => setIsAddModalOpen(true)}
+            title="Thêm mã"
+          >
+            +
+          </button>
           <div className="menu-container" ref={menuRef}>
             <button
               className="menu-btn"
@@ -291,8 +323,8 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
         <div className="table-header">
           <div className="th-symbol">Mã</div>
           {viewSettings.columns.price && <div className="th-price">Lần cuối</div>}
-          {viewSettings.columns.change && <div className="th-change">Th.đổi</div>}
-          {viewSettings.columns.changePercent && <div className="th-percent">%Thđổi</div>}
+          {viewSettings.columns.change && <div className="th-change">Thay đổi</div>}
+          {viewSettings.columns.changePercent && <div className="th-percent">%Thay đổi</div>}
           {viewSettings.columns.volume && <div className="th-volume">Khối lượng</div>}
         </div>
       )}
@@ -321,17 +353,17 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
                     )}
                   </div>
                 </div>
-                {viewSettings.columns.price && (
-                  <div className="cell-price">{formatPrice(symbol.price, symbol.code)}</div>
-                )}
+                <div className={`cell-price ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
+                  {formatPrice(symbol.price, symbol.code)}
+                </div>
                 {viewSettings.columns.change && (
                   <div className={`cell-change ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
-                    {symbol.price > 0 ? (symbol.change >= 0 ? '+' : '') + symbol.change.toFixed(2) : '—'}
+                    {symbol.price > 0 ? (symbol.change >= 0 ? '+' : '') + symbol.change.toFixed(4) : '—'}
                   </div>
                 )}
                 {viewSettings.columns.changePercent && (
                   <div className={`cell-percent ${symbol.changePercent >= 0 ? 'positive' : 'negative'}`}>
-                    {symbol.price > 0 ? (symbol.changePercent >= 0 ? '+' : '') + symbol.changePercent.toFixed(2) + '%' : '—'}
+                    {symbol.price > 0 ? (symbol.changePercent >= 0 ? '+' : '') + symbol.changePercent.toFixed(4) + '%' : '—'}
                   </div>
                 )}
                 {viewSettings.columns.volume && (
@@ -361,11 +393,11 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
                   {(viewSettings.columns.change || viewSettings.columns.changePercent) && (
                     <div className={`change ${symbol.change >= 0 ? 'positive' : 'negative'}`}>
                       {viewSettings.columns.change && symbol.price > 0 && (
-                        <span>{symbol.change >= 0 ? '+' : ''}{symbol.change.toFixed(2)}</span>
+                        <span>{symbol.change >= 0 ? '+' : ''}{symbol.change.toFixed(4)}</span>
                       )}
                       {viewSettings.columns.change && viewSettings.columns.changePercent && ' '}
                       {viewSettings.columns.changePercent && symbol.price > 0 && (
-                        <span>({symbol.changePercent.toFixed(2)}%)</span>
+                        <span>({symbol.changePercent.toFixed(4)}%)</span>
                       )}
                       {symbol.price === 0 && '—'}
                     </div>
@@ -377,32 +409,19 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol }: WatchlistProps) =>
         ))}
       </div>
 
-      {/* Symbol Detail Panel */}
-      <div className="symbol-detail">
-        <h4>{selectedSymbol}</h4>
-        <div className="detail-row">
-          <span className="label">Giá</span>
-          <span className="value">
-            {selectedSymbolData ? formatPrice(selectedSymbolData.price, selectedSymbol) : 'N/A'}
-          </span>
+      {metrics && (
+        <div className="watchlist-footer">
+          <MetricsPanel {...metrics} />
         </div>
-        <div className="detail-row">
-          <span className="label">Thay đổi</span>
-          <span
-            className={`value ${(selectedSymbolData?.change || 0) >= 0 ? 'positive' : 'negative'}`}
-          >
-            {selectedSymbolData && selectedSymbolData.price > 0
-              ? selectedSymbolData.change.toFixed(2)
-              : 'N/A'}
-          </span>
-        </div>
-        {selectedSymbolData?.volume !== undefined && selectedSymbolData.volume > 0 && (
-          <div className="detail-row">
-            <span className="label">Khối lượng</span>
-            <span className="value">{formatVolume(selectedSymbolData.volume)}</span>
-          </div>
-        )}
-      </div>
+      )}
+
+
+      <AddSymbolModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        onSelect={handleToggleSymbol}
+        existingSymbols={symbols.map(s => s.code)}
+      />
     </div>
   );
 };

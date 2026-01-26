@@ -23,16 +23,17 @@ public class RedisCacheConfig {
 		objectMapper.activateDefaultTyping(
 				objectMapper.getPolymorphicTypeValidator(),
 				ObjectMapper.DefaultTyping.NON_FINAL,
-				JsonTypeInfo.As.PROPERTY
-		);
+				JsonTypeInfo.As.PROPERTY);
 
 		GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper);
 
 		return RedisCacheConfiguration.defaultCacheConfig()
 				.disableCachingNullValues()
-				.serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+				.serializeKeysWith(
+						RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
 				.serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer));
 	}
+
 	@Bean
 	public RedisCacheManagerBuilderCustomizer redisCacheManagerBuilderCustomizer(
 			ExtendedCacheProperties extendedCacheProperties,
@@ -44,10 +45,6 @@ public class RedisCacheConfig {
 					.forEach((key, value) -> builder.withCacheConfiguration(key,
 							customRedisCacheConfiguration.entryTtl(value)));
 		};
-	}
-	@Bean
-	public ObjectMapper objectMapper() {
-		return  new ObjectMapper();
 	}
 
 }
