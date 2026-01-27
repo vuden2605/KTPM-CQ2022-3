@@ -25,6 +25,7 @@ export const Dashboard = () => {
     } finally {
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      localStorage.removeItem('role');
       navigate('/login');
     }
   };
@@ -65,6 +66,30 @@ export const Dashboard = () => {
             </svg>
             Đăng xuất
           </button>
+
+          {localStorage.getItem('role') === 'ADMIN' && (
+            <button
+              className="admin-btn"
+              onClick={() => navigate('/admin')}
+              style={{
+                marginLeft: '10px',
+                padding: '8px 12px',
+                background: '#e67e22',
+                border: 'none',
+                borderRadius: '4px',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 12C14.21 12 16 10.21 16 8C16 5.79 14.21 4 12 4C9.79 4 8 5.79 8 8C8 10.21 9.79 12 12 12ZM12 14C9.33 14 4 15.34 4 18V20H20V18C20 15.34 14.67 14 12 14Z" fill="currentColor" />
+              </svg>
+              Admin Dashboard
+            </button>
+          )}
         </div>
       </div>
 
@@ -107,6 +132,6 @@ export const Dashboard = () => {
           metrics={metrics}
         />
       </div>
-    </div>
+    </div >
   );
 };

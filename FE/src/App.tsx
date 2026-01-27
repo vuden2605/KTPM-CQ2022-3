@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+
+import { AdminDashboard } from './pages/AdminDashboard';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -26,6 +28,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute>
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

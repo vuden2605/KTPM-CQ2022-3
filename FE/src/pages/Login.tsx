@@ -10,6 +10,7 @@ interface LoginResponse {
     accessToken?: string;
     refreshToken?: string;
     isAuthenticated?: boolean;
+    role?: string;
   };
 }
 
@@ -45,6 +46,9 @@ export const Login = () => {
         }
         if (result?.data?.refreshToken) {
           localStorage.setItem('refreshToken', result.data.refreshToken);
+        }
+        if (result?.data?.role) {
+          localStorage.setItem('role', result.data.role);
         }
 
         // Navigate to main app
