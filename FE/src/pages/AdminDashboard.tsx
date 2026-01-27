@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import '../App.css';
+import '../styles/AdminDashboard.css';
 
 interface User {
   id: number;
   userName: string;
   email: string;
-  role: 'USER' | 'ADMIN' | 'VIP';
-  vipStartAt?: string;
-  vipEndAt?: string;
+  role: 'ADMIN' | 'USER' | 'VIP';
+  isActive: boolean;
 }
 
 export const AdminDashboard = () => {
@@ -17,110 +16,121 @@ export const AdminDashboard = () => {
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  const API_BASE = import.meta.env.VITE_API_BASE || '';
-
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
+      const accessToken = localStorage.getItem('accessToken');
+      const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
 
       const response = await fetch(`${API_BASE}/api/v1/users`, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
         }
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        setUsers(result.data);
-      } else {
+      if (!response.ok) {
         if (response.status === 403) {
-          setError('Access Denied: You are not an Admin');
+          setError('Bạn không có quyền truy cập trang này');
         } else {
-          setError('Failed to fetch users');
+          setError('Lấy danh sách người dùng thất bại');
         }
+        return;
       }
+
+      const result = await response.json();
+      setUsers(result.data);
     } catch (err) {
-      setError('Error connecting to server');
+      setError('Lỗi kết nối đến server');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleVip = async (userId: number) => {
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const handleToggleVip = async (userId: number, currentRole: string) => {
+    if (currentRole === 'ADMIN') return;
+
     try {
-      const token = localStorage.getItem('accessToken');
+      const accessToken = localStorage.getItem('accessToken');
+      const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
+
       const response = await fetch(`${API_BASE}/api/v1/users/${userId}/vip-toggle`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${accessToken}`
         }
       });
 
       if (response.ok) {
-        // Refresh list or update local state
-        fetchUsers();
-        alert('VIP status updated');
+        const result = await response.json();
+        // Update local state to reflect change immediately
+        setUsers(users.map(u => u.id === userId ? { ...u, role: result.data.role } : u));
       } else {
-        alert('Failed to update VIP status');
+        alert('Cập nhật thất bại');
       }
     } catch (e) {
-      alert('Error updating VIP status');
+      console.error(e);
+      alert('Lỗi kết nối');
     }
   };
 
-  useEffect(() => {
-    fetchUsers();
-  }, [navigate]);
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div style={{ color: 'red', padding: '20px' }}>{error}</div>;
+  if (loading) return <div className="loading-container">Đang tải dữ liệu...</div>;
 
   return (
-    <div style={{ padding: '20px', color: '#fff' }}>
-      <h1>Admin Dashboard</h1>
-      <button onClick={() => navigate('/')} style={{ marginBottom: '20px', padding: '10px' }}>Back to Dashboard</button>
+    <div className="admin-container">
+      <div className="admin-header">
+        <h1 className="admin-title">Admin Dashboard</h1>
+        <button className="back-btn" onClick={() => navigate('/')}>
+          ← Quay lại Dashboard
+        </button>
+      </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '20px' }}>
-        <thead>
-          <tr style={{ background: '#333', textAlign: 'left' }}>
-            <th style={{ padding: '10px' }}>ID</th>
-            <th style={{ padding: '10px' }}>Username</th>
-            <th style={{ padding: '10px' }}>Email</th>
-            <th style={{ padding: '10px' }}>Role</th>
-            <th style={{ padding: '10px' }}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map(user => (
-            <tr key={user.id} style={{ borderBottom: '1px solid #444' }}>
-              <td style={{ padding: '10px' }}>{user.id}</td>
-              <td style={{ padding: '10px' }}>{user.userName}</td>
-              <td style={{ padding: '10px' }}>{user.email}</td>
-              <td style={{ padding: '10px' }}>{user.role}</td>
-              <td style={{ padding: '10px' }}>
-                <button
-                  onClick={() => toggleVip(user.id)}
-                  style={{
-                    padding: '5px 10px',
-                    background: user.role === 'VIP' ? '#e74c3c' : '#2ecc71',
-                    border: 'none',
-                    color: 'white',
-                    cursor: 'pointer',
-                    borderRadius: '4px'
-                  }}
-                  disabled={user.role === 'ADMIN'}
-                >
-                  {user.role === 'VIP' ? 'Revoke VIP' : 'Make VIP'}
-                </button>
-              </td>
+      {error && <div className="error-message">{error}</div>}
+
+      <div className="admin-table-container">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>VIP Access</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map(user => (
+              <tr key={user.id}>
+                <td>{user.id}</td>
+                <td>{user.userName}</td>
+                <td>{user.email}</td>
+                <td>
+                  <span className={`role-badge role-${user.role.toLowerCase()}`}>
+                    {user.role}
+                  </span>
+                </td>
+                <td>
+                  {user.role !== 'ADMIN' && (
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={user.role === 'VIP'}
+                        onChange={() => handleToggleVip(user.id, user.role)}
+                      />
+                      <span className="slider"></span>
+                    </label>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
