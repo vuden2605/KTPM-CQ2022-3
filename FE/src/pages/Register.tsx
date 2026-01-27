@@ -32,7 +32,7 @@ export const Register = () => {
     setLoading(true);
 
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE;
+      const API_BASE = import.meta.env.VITE_API_BASE || '';
       const response = await fetch(`${API_BASE}/api/v1/users`, {
         method: 'POST',
         headers: {
