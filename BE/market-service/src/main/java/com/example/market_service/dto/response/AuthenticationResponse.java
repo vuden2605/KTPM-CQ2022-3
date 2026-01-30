@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.example.market_service.enums.Role;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,4 +17,5 @@ public class AuthenticationResponse {
 	private String accessToken;
 	private String refreshToken;
 	private boolean isAuthenticated;
+	private Role role;
 }

@@ -38,7 +38,7 @@ public class AuthenticationService {
 	public AuthenticationResponse login(LoginRequest request) {
 		User user = userRepository.findByUserName(request.getUserName())
 				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-		if(!user.getPassword().equals(request.getPassword())) {
+		if (!user.getPassword().equals(request.getPassword())) {
 			throw new AppException(ErrorCode.INVALID_PASSWORD);
 		}
 		String accessToken = jwtService.generateAccessToken(user);
@@ -47,8 +47,10 @@ public class AuthenticationService {
 				.accessToken(accessToken)
 				.refreshToken(refreshToken)
 				.isAuthenticated(true)
+				.role(user.getRole())
 				.build();
 	}
+
 	public AuthenticationResponse loginWithGoogle(GoogleLoginRequest googleLoginRequest) {
 		GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
 				.setAudience(Collections.singletonList(googleClientId))
@@ -60,20 +62,20 @@ public class AuthenticationService {
 			}
 			String email = googleIdToken.getPayload().getEmail();
 			User user = userRepository.findByEmail(email)
-					.orElseGet(() ->
-							createUserFromGoogle(googleIdToken)
-					);
+					.orElseGet(() -> createUserFromGoogle(googleIdToken));
 			String accessToken = jwtService.generateAccessToken(user);
 			String refreshToken = jwtService.generateRefreshToken(user);
 			return AuthenticationResponse.builder()
 					.accessToken(accessToken)
 					.refreshToken(refreshToken)
 					.isAuthenticated(true)
+					.role(user.getRole())
 					.build();
 		} catch (Exception e) {
 			throw new AppException(ErrorCode.GOOGLE_LOGIN_FAILED);
 		}
 	}
+
 	public User createUserFromGoogle(GoogleIdToken googleIdToken) {
 		GoogleIdToken.Payload payload = googleIdToken.getPayload();
 		User user = User.builder()
@@ -83,6 +85,7 @@ public class AuthenticationService {
 				.build();
 		return userRepository.save(user);
 	}
+
 	public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
 		String refreshToken = refreshTokenRequest.getRefreshToken();
 		if (refreshToken == null || refreshToken.isEmpty()) {
@@ -107,9 +110,11 @@ public class AuthenticationService {
 				.accessToken(newAccessToken)
 				.refreshToken(newRefreshToken)
 				.isAuthenticated(true)
+				.role(user.getRole())
 				.build();
 	}
-	public void logout (LogoutRequest logoutRequest) {
+
+	public void logout(LogoutRequest logoutRequest) {
 		Claims claims = jwtService.verifyToken(logoutRequest.getAccessToken());
 		String accessTokenId = claims.getId();
 		String refreshTokenId = claims.get("rfId", String.class);

@@ -10,6 +10,7 @@ interface LoginResponse {
     accessToken?: string;
     refreshToken?: string;
     isAuthenticated?: boolean;
+    role?: string;
   };
 }
 
@@ -26,7 +27,7 @@ export const Login = () => {
     setLoading(true);
 
     try {
-      const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:8082';
+      const API_BASE = import.meta.env.VITE_API_BASE || '';
       const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
         method: 'POST',
         headers: {
@@ -45,6 +46,9 @@ export const Login = () => {
         }
         if (result?.data?.refreshToken) {
           localStorage.setItem('refreshToken', result.data.refreshToken);
+        }
+        if (result?.data?.role) {
+          localStorage.setItem('role', result.data.role);
         }
 
         // Navigate to main app
@@ -89,6 +93,7 @@ export const Login = () => {
               onChange={(e) => setUserName(e.target.value)}
               placeholder="Nhập tên đăng nhập"
               required
+              autoComplete="username"
               disabled={loading}
             />
           </div>
@@ -102,6 +107,7 @@ export const Login = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Nhập mật khẩu"
               required
+              autoComplete="current-password"
               disabled={loading}
             />
           </div>

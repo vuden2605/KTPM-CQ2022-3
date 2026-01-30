@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createChart } from 'lightweight-charts';
 import type { CandlestickData, Time } from 'lightweight-charts';
-import { MetricsPanel } from './MetricsPanel';
 import { sharedWs } from '../lib/sharedWs';
 
 interface CandlestickChartProps {
@@ -10,21 +9,16 @@ interface CandlestickChartProps {
   intervalSeconds?: number;
   /** if true, do not subscribe to backend WS and use mock-only mode */
   useMockOnly?: boolean;
+  onMetricsUpdate?: (metrics: { messagesPerSec: number; bufferSize: number; dropped: number; fps: number }) => void;
 }
 
-export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false }: CandlestickChartProps) => {
+export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false, onMetricsUpdate }: CandlestickChartProps) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
   const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
-
-  // Metrics state
-  const [messagesPerSec, setMessagesPerSec] = useState(0);
-  const [bufferSize, setBufferSize] = useState(0);
-  const [dropped, setDropped] = useState(0);
-  const [fps, setFps] = useState(0);
   const [hover, setHover] = useState<{
     time?: number | null;
     open?: number | null;
@@ -57,11 +51,46 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       },
       timeScale: {
         timeVisible: true,
-        secondsVisible: true,
+        secondsVisible: false,
         borderColor: '#2b2f3a',
+        tickMarkFormatter: (time: number, tickMarkType: any, locale: string) => {
+          const date = new Date(time * 1000);
+          // Simple check: if hours/minutes are 0 and we are zooming out, we might want date. 
+          // But 'tickMarkType' is reliable if imported. 
+          // For now, simple logic:
+          // If we are showing time (Type 0, 1):
+          // Actually, let's just format to readable local string logic:
+          // If it looks like midnight local, show date?
+          // Let's stick to what user wanted: "Convert timezone" + "No seconds".
+          // Only formatting time-level ticks. For Day level, it usually defaults to date string?
+          // Actually, replacing tickMarkFormatter overrides EVERYTHING.
+
+          // Heuristic:
+          // TickMarkType: Year=0, Month=1, DayOfMonth=2, Time=3, TimeWithSeconds=4
+          if (tickMarkType < 3) {
+            return date.toLocaleDateString(locale);
+          }
+          return date.toLocaleTimeString(locale, {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+        },
       },
       rightPriceScale: {
         borderColor: '#2b2f3a',
+      },
+      localization: {
+        // Use browser's local timezone
+        timeFormatter: (timestamp: number) => {
+          const date = new Date(timestamp * 1000);
+          const d = date.getDate().toString().padStart(2, '0');
+          const m = (date.getMonth() + 1).toString().padStart(2, '0');
+          const y = date.getFullYear();
+          const h = date.getHours().toString().padStart(2, '0');
+          const min = date.getMinutes().toString().padStart(2, '0');
+          return `${d}/${m}/${y} ${h}:${min}`;
+        },
       },
     });
 
@@ -281,7 +310,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         const backend = computeBackendRequest(intervalSec, limit);
         const interval = backend.interval;
         const pageSize = backend.pageSize ?? limit;
-        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:8082';
+        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
         const url = `${API_BASE}/api/v1/candles/recent?symbol=${encodeURIComponent(sym)}&interval=${interval}&pageSize=${pageSize}`;
         const token = localStorage.getItem('accessToken');
         const headers: Record<string, string> = {};
@@ -515,16 +544,23 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     }
 
     // Metrics update intervals
-    const msgInterval = setInterval(() => {
-      setMessagesPerSec(messagesInRef.current);
-      messagesInRef.current = 0;
-    }, 1000);
-
     const metricsInterval = setInterval(() => {
-      setBufferSize(incomingBufferRef.current.length);
-      setDropped(droppedRef.current);
-      setFps(frameCountRef.current);
+      const msgs = messagesInRef.current;
+      messagesInRef.current = 0;
+
+      const buf = incomingBufferRef.current.length;
+      const drp = droppedRef.current;
+      const fps = frameCountRef.current;
       frameCountRef.current = 0;
+
+      if (onMetricsUpdate) {
+        onMetricsUpdate({
+          messagesPerSec: msgs,
+          bufferSize: buf,
+          dropped: drp,
+          fps: fps
+        });
+      }
     }, 1000);
 
     return () => {
@@ -561,7 +597,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         cancelAnimationFrame(rafIdRef.current);
         rafIdRef.current = null;
       }
-      clearInterval(msgInterval);
       clearInterval(metricsInterval);
 
       // finally remove chart instance
@@ -578,20 +613,56 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         position: 'relative'
       }}
     >
-      <MetricsPanel messagesPerSec={messagesPerSec} bufferSize={bufferSize} dropped={dropped} fps={fps} />
       {/* Hover OHLCV overlay */}
-      <div style={{ position: 'absolute', left: 12, top: 12, zIndex: 40 }}>
-        {hover && hover.time ? (
-          <div style={{ background: 'rgba(20,24,30,0.9)', color: '#d1d4dc', padding: '6px 8px', borderRadius: 6, minWidth: 140, maxWidth: 180, width: 'auto', fontSize: 11, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
-            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 12 }}>{symbol.toUpperCase()}</div>
-            <div style={{ marginBottom: 6, fontSize: 11 }}>Time: {new Date((hover.time as number) * 1000).toLocaleString()}</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>O:</div><div>{typeof hover.open === 'number' ? hover.open.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>H:</div><div>{typeof hover.high === 'number' ? hover.high.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>L:</div><div>{typeof hover.low === 'number' ? hover.low.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>C:</div><div>{typeof hover.close === 'number' ? hover.close.toFixed(4) : '-'}</div></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><div>V:</div><div>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(4) : '-'} {typeof (hover as any).vPercent === 'number' ? '(' + ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%)' : ''}</div></div>
-          </div>
-        ) : null}
+      <div style={{ position: 'absolute', left: 16, top: 10, zIndex: 40, pointerEvents: 'none', maxWidth: 'calc(100% - 100px)' }}>
+        <div style={{
+          color: '#d1d4dc',
+          fontSize: 12,
+          display: 'flex',
+          gap: 12, /* Reduced gap to fit more */
+          flexWrap: 'wrap', /* Allow wrapping */
+          fontFamily: 'JetBrains Mono, monospace'
+        }}>
+          <span style={{ fontWeight: 600, color: '#d1d4dc' }}>{symbol.toUpperCase()}</span>
+
+          {hover && hover.time ? (
+            <>
+              <span style={{ color: '#d1d4dc', marginRight: 8 }}>
+                {(() => {
+                  const date = new Date((hover.time || 0) * 1000);
+                  const d = date.getDate().toString().padStart(2, '0');
+                  const m = (date.getMonth() + 1).toString().padStart(2, '0');
+                  const y = date.getFullYear();
+                  const h = date.getHours().toString().padStart(2, '0');
+                  const min = date.getMinutes().toString().padStart(2, '0');
+                  return `${d}/${m}/${y} ${h}:${min}`;
+                })()}
+              </span>
+              <span style={{ color: '#787b86' }}>
+                O <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.open === 'number' ? hover.open.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                H <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.high === 'number' ? hover.high.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                L <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.low === 'number' ? hover.low.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                C <span className={(hover.open ?? 0) <= (hover.close ?? 0) ? 'text-up' : 'text-down'}>{typeof hover.close === 'number' ? hover.close.toFixed(4) : '-'}</span>
+              </span>
+              <span style={{ color: '#787b86' }}>
+                Vol <span className={(hover as any).vChange >= 0 ? 'text-up' : 'text-down'}>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(2) : '-'} ({typeof (hover as any).vPercent === 'number' ? ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%' : ''})</span>
+              </span>
+            </>
+          ) : (
+            <span style={{ color: '#787b86' }}>Moving cursor to see data</span>
+          )}
+        </div>
+
+        <style>{`
+            .text-up { color: #26a69a; }
+            .text-down { color: #ef5350; }
+          `}</style>
       </div>
     </div>
   );

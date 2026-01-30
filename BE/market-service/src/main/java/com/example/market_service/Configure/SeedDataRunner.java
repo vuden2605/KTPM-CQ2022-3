@@ -17,18 +17,33 @@ public class SeedDataRunner implements CommandLineRunner {
         String seedUser = "testuser";
         if (userRepository.existsByUserName(seedUser)) {
             System.out.println("Seed user already exists: " + seedUser);
-            return;
+        } else {
+            User u = User.builder()
+                    .email("testuser@example.com")
+                    .userName(seedUser)
+                    .password("password123")
+                    .role(Role.USER)
+                    .isActive(true)
+                    .build();
+
+            userRepository.save(u);
+            System.out.println("Seeded user: " + seedUser + " / password123");
         }
 
-        User u = User.builder()
-                .email("testuser@example.com")
-                .userName(seedUser)
-	                .password("password123")
-                .role(Role.USER)
-                .isActive(true)
-                .build();
+        String seedAdmin = "admin";
+        if (userRepository.existsByUserName(seedAdmin)) {
+            System.out.println("Seed admin already exists: " + seedAdmin);
+        } else {
+            User admin = User.builder()
+                    .email("admin@example.com")
+                    .userName(seedAdmin)
+                    .password("admin123")
+                    .role(Role.ADMIN)
+                    .isActive(true)
+                    .build();
 
-        userRepository.save(u);
-        System.out.println("Seeded user: " + seedUser + " / password123");
+            userRepository.save(admin);
+            System.out.println("Seeded admin: " + seedAdmin + " / admin123");
+        }
     }
 }

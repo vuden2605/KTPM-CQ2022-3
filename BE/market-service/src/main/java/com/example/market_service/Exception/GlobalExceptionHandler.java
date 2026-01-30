@@ -9,14 +9,16 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import java.util.Objects;
 
 @ControllerAdvice
+@lombok.extern.slf4j.Slf4j
 public class GlobalExceptionHandler {
 	@ExceptionHandler(Exception.class)
 	public ResponseEntity<ApiResponse<?>> handleGeneralException(Exception e) {
+		log.error("Generic Exception: ", e);
 		ApiResponse<?> response = ApiResponse.builder()
 				.code(ErrorCode.INTERNAL_SERVER_ERROR.getCode())
 				.message(e.getMessage())
 				.build();
-		return ResponseEntity.status(ErrorCode.INTERNAL_SERVER_ERROR.getCode()).body(response);
+		return ResponseEntity.status(ErrorCode.INTERNAL_SERVER_ERROR.getHttpStatus()).body(response);
 	}
 
 	@ExceptionHandler(AppException.class)

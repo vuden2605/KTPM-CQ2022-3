@@ -8,4 +8,18 @@ export default defineConfig({
     // Fix sockjs-client "global is not defined" error
     global: 'globalThis',
   },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:80',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/ws': {
+        target: 'http://localhost:80',
+        ws: true,
+        changeOrigin: true,
+      }
+    },
+  },
 })
