@@ -9,9 +9,10 @@ from typing import List, Dict
 from datetime import datetime
 
 # Ollama config
-OLLAMA_API = "http://localhost:11434/api/generate"
-MODEL = "gemma3:1b"
+import os
 
+OLLAMA_API = os.getenv("OLLAMA_API", "http://ollama:11434/api/generate")  # ← SỬA: ollama thay vì localhost
+MODEL = os.getenv("OLLAMA_MODEL", "gemma3:1b")  # ← SỬA: gemma3:1b
 
 def generate_explanation_window(
     final_prediction: str,
@@ -98,7 +99,7 @@ CHỈ TRẢ LỜI PHẦN GIẢI THÍCH, KHÔNG CẦN CHÀO HỎI:"""
                 "temperature": 0.3,
                 "stream": False
             },
-            timeout=30
+            timeout=90
         )
         
         response.raise_for_status()

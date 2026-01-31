@@ -15,7 +15,7 @@ services:
     networks:
       - crypto-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -32,7 +32,7 @@ services:
     networks:
       - crypto-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "redis123", "ping" ]
+      test: ["CMD", "redis-cli", "-a", "redis123", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,7 +75,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_RETENTION_HOURS: 168
     volumes:
       - kafka_data:/var/lib/kafka/data
@@ -96,7 +96,69 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - crypto-network
+  # ============================================
+  # OLLAMA SERVICE (LLM)
+  # ============================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: crypto-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./ollama-init.sh:/ollama-init.sh
+    networks:
+      - crypto-network
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_KEEP_ALIVE=24h
+    entrypoint: ["/bin/bash", "/ollama-init.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list | grep -q gemma3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s # Đợi 2 phút để pull model
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 
+  # ============================================
+  # AI SERVICE (PYTHON)
+  # ============================================
+  ai-service:
+    build:
+      context: ./BE/ai-service
+      dockerfile: Dockerfile
+    container_name: crypto-ai-service
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy # ← Đợi ollama ready
+    ports:
+      - "8003:8003"
+    environment:
+      MONGO_URI: "mongodb+srv://nguyenvanvu060104:cryptonews123456@cluster0.mz66r.mongodb.net/cryptonews?retryWrites=true&w=majority&appName=Cluster0&authSource=admin"
+      MONGO_DB_NAME: "cryptonews"
+      OLLAMA_API: "http://ollama:11434/api/generate"
+      OLLAMA_MODEL: "gemma3:1b" # ← GIỮ NGUYÊN
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./BE/ai-service:/app
+    networks:
+      - crypto-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
   # ============ BE Services ============
 
   ingest-service:
@@ -204,7 +266,7 @@ volumes:
   zookeeper_data:
   zookeeper_logs:
   kafka_data:
-
+  ollama_data:
 
 networks:
   crypto-network:
