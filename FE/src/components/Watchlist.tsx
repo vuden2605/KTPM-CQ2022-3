@@ -236,12 +236,12 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
 
       {/* Header */}
       <div className="watchlist-header">
-        <h3>Danh sách theo dõi (Crypto)</h3>
+        <h3>Watchlist (Crypto)</h3>
         <div className="header-actions">
           <button
             className="add-symbol-btn"
             onClick={() => setIsAddModalOpen(true)}
-            title="Thêm mã"
+            title="Add symbol"
           >
             +
           </button>
@@ -249,7 +249,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
             <button
               className="menu-btn"
               onClick={() => setMenuOpen(!menuOpen)}
-              title="Tùy chỉnh"
+              title="Customize"
             >
               ⋯
             </button>
@@ -258,7 +258,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
                 {/* Table View Toggle */}
                 <div className="menu-section">
                   <label className="menu-toggle">
-                    <span>Chế độ xem dạng bảng</span>
+                    <span>Table view</span>
                     <input
                       type="checkbox"
                       checked={viewSettings.tableView}
@@ -272,7 +272,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
 
                 {/* Column Visibility */}
                 <div className="menu-section">
-                  <div className="menu-section-title">TÙY CHỈNH CỘT</div>
+                  <div className="menu-section-title">CUSTOMIZE COLUMNS</div>
                   {Object.entries(viewSettings.columns).map(([key, value]) => (
                     <label className="menu-checkbox" key={key}>
                       <input
@@ -295,7 +295,7 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
 
                 {/* Symbol Display */}
                 <div className="menu-section">
-                  <div className="menu-section-title">HIỂN THỊ MÃ GIAO DỊCH</div>
+                  <div className="menu-section-title">SYMBOL DISPLAY</div>
                   {Object.entries(viewSettings.symbolDisplay).map(([key, value]) => (
                     <label className="menu-checkbox" key={key}>
                       <input
@@ -321,11 +321,11 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
       {/* Table Header (only in table view) */}
       {viewSettings.tableView && (
         <div className="table-header">
-          <div className="th-symbol">Mã</div>
-          {viewSettings.columns.price && <div className="th-price">Lần cuối</div>}
-          {viewSettings.columns.change && <div className="th-change">Thay đổi</div>}
-          {viewSettings.columns.changePercent && <div className="th-percent">%Thay đổi</div>}
-          {viewSettings.columns.volume && <div className="th-volume">Khối lượng</div>}
+          <div className="th-symbol">Symbol</div>
+          {viewSettings.columns.price && <div className="th-price">Last</div>}
+          {viewSettings.columns.change && <div className="th-change">Change</div>}
+          {viewSettings.columns.changePercent && <div className="th-percent">%Change</div>}
+          {viewSettings.columns.volume && <div className="th-volume">Volume</div>}
         </div>
       )}
 
