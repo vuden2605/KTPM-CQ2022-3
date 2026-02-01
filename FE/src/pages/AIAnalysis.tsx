@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../App.css';
 
@@ -24,10 +24,42 @@ interface PredictResponse {
 export const AIAnalysis = () => {
   const navigate = useNavigate();
 
+  // Load symbols from localStorage
+  const [availableSymbols, setAvailableSymbols] = useState<{ code: string, name: string }[]>([]);
+
+  useEffect(() => {
+    const loadSymbols = () => {
+      const saved = localStorage.getItem('watchlistSymbols');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setAvailableSymbols(parsed.map((s: any) => ({ code: s.code, name: s.name || s.code })));
+          }
+        } catch (e) {
+          console.error("Failed to parse watchlist symbols", e);
+        }
+      }
+    };
+
+    loadSymbols();
+
+    // Optional: Listen for storage changes if multiple tabs update it
+    window.addEventListener('storage', loadSymbols);
+    return () => window.removeEventListener('storage', loadSymbols);
+  }, []);
+
   // Form State
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [horizon, setHorizon] = useState('24h');
   const [hours, setHours] = useState(6);
+
+  // Update symbol if current selection is not in list (optional, but good UX to default to first available)
+  useEffect(() => {
+    if (availableSymbols.length > 0 && !availableSymbols.find(s => s.code === symbol)) {
+      setSymbol(availableSymbols[0].code);
+    }
+  }, [availableSymbols]);
 
   // UI State
   const [loading, setLoading] = useState(false);
@@ -124,8 +156,7 @@ export const AIAnalysis = () => {
           }}>
             <div style={{ flex: 1 }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>Symbol</label>
-              <input
-                type="text"
+              <select
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value)}
                 style={{
@@ -136,7 +167,14 @@ export const AIAnalysis = () => {
                   background: 'var(--bg-app)',
                   color: 'var(--text-primary)'
                 }}
-              />
+              >
+                {availableSymbols.length === 0 && <option value="BTCUSDT">BTCUSDT (Default)</option>}
+                {availableSymbols.map(s => (
+                  <option key={s.code} value={s.code}>
+                    {s.code}
+                  </option>
+                ))}
+              </select>
             </div>
             <div style={{ width: '150px' }}>
               <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)', fontSize: '13px' }}>Horizon</label>

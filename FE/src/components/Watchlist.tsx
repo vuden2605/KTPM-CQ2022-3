@@ -66,7 +66,10 @@ const INITIAL_SYMBOLS: WatchSymbol[] = [
 ];
 
 export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: WatchlistProps) => {
-  const [symbols, setSymbols] = useState<WatchSymbol[]>(INITIAL_SYMBOLS);
+  const [symbols, setSymbols] = useState<WatchSymbol[]>(() => {
+    const saved = localStorage.getItem('watchlistSymbols');
+    return saved ? JSON.parse(saved) : INITIAL_SYMBOLS;
+  });
   const [width, setWidth] = useState(() => {
     const saved = localStorage.getItem('watchlistWidth');
     return saved ? parseInt(saved, 10) : 350;
@@ -86,6 +89,11 @@ export const Watchlist = ({ onSymbolSelect, selectedSymbol, metrics }: Watchlist
   useEffect(() => {
     localStorage.setItem('watchlistWidth', width.toString());
   }, [width]);
+
+  // Save symbols to localStorage
+  useEffect(() => {
+    localStorage.setItem('watchlistSymbols', JSON.stringify(symbols));
+  }, [symbols]);
 
   // Save view settings to localStorage
   useEffect(() => {
