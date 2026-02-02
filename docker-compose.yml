@@ -262,6 +262,26 @@ services:
     networks:
       - crypto-network
 
+  # ============================================
+  # CRAWLER SERVICE (PYTHON)
+  # Runs the news crawlers on startup; set watch mode via env
+  # ============================================
+  crawler-service:
+    build: ./crypto-news-crawler
+    container_name: crypto-crawler
+    restart: unless-stopped
+    # Load Mongo and other configs from the project's .env
+    env_file:
+      - ./crypto-news-crawler/.env
+    environment:
+      # Enable continuous crawling at interval (seconds)
+      CRAWL_WATCH: "1"
+      CRAWL_INTERVAL_SECONDS: "60"
+      # Skip AI config unless explicitly needed
+      SKIP_AI_CONFIG: ""
+    networks:
+      - crypto-network
+
 volumes:
   postgres_data:
   redis_data:
