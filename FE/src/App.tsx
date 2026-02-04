@@ -6,6 +6,7 @@ import { Register } from './pages/Register';
 
 import { AdminDashboard } from './pages/AdminDashboard';
 import { NotFound } from './pages/NotFound';
+import { AIAnalysis } from './pages/AIAnalysis';
 
 function App() {
   // Check if user is authenticated
@@ -36,6 +37,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/ai-analysis"
+          element={
+            <ProtectedRoute>
+              <AIAnalysis />
             </ProtectedRoute>
           }
         />

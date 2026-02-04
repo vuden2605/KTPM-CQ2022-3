@@ -57,7 +57,7 @@ export const AddSymbolModal: React.FC<AddSymbolModalProps> = ({ isOpen, onClose,
     <div className="modal-overlay">
       <div className="modal-content" ref={modalRef}>
         <div className="modal-header">
-          <h3>Quản lý mã</h3>
+          <h3>Manage symbols</h3>
           <button className="close-btn" onClick={onClose}>×</button>
         </div>
 
@@ -65,7 +65,7 @@ export const AddSymbolModal: React.FC<AddSymbolModalProps> = ({ isOpen, onClose,
           <input
             ref={inputRef}
             type="text"
-            placeholder="Tìm kiếm mã (ví dụ: BTC, ETH...)"
+            placeholder="Search symbols (e.g., BTC, ETH...)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoComplete="off"
@@ -99,7 +99,7 @@ export const AddSymbolModal: React.FC<AddSymbolModalProps> = ({ isOpen, onClose,
             })
           ) : (
             <div className="no-results">
-              Không tìm thấy kết quả hoặc mã đã được thêm
+              No results found or symbol already added
             </div>
           )}
         </div>

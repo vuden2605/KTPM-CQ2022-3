@@ -44,3 +44,7 @@ build/
 
 ### Documentation ###
 docs/
+
+### Python ###
+**/venv/
+**/__pycache__

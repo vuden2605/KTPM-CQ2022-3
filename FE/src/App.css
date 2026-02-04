@@ -115,8 +115,8 @@ body {
 }
 
 .logout-btn {
-  background: transparent;
-  border: none;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 8px 12px;
   border-radius: 4px;
@@ -130,8 +130,31 @@ body {
 }
 
 .logout-btn:hover {
-  background: var(--border-color);
+  background: rgba(239, 83, 80, 0.1);
+  color: #ef5350;
+  border-color: #ef5350;
+}
+
+.nav-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  gap: 6px;
+  font-family: var(--font-base);
+}
+
+.nav-btn:hover {
+  background: var(--bg-app);
   color: var(--text-primary);
+  border-color: var(--text-primary);
 }
 
 .interval-btn {
