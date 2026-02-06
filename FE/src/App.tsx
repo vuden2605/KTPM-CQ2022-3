@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
+import { News } from './pages/News';
 
 import { AdminDashboard } from './pages/AdminDashboard';
 import { NotFound } from './pages/NotFound';
@@ -40,6 +41,15 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/news"
+          element={
+            <ProtectedRoute>
+              <News />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/ai-analysis"
           element={
@@ -50,7 +60,7 @@ function App() {
         />
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </BrowserRouter>
+    </BrowserRouter >
   );
 }
 

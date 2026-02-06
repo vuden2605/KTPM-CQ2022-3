@@ -138,6 +138,30 @@ export const AIAnalysis = () => {
             ← Back to Dashboard
           </button>
 
+          <button
+            className="news-btn"
+            onClick={() => navigate('/news')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 12px',
+              background: '#009688', // Teal color for News
+              border: 'none',
+              borderRadius: '4px',
+              color: 'white',
+              cursor: 'pointer'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 20H5C3.89543 20 3 19.1046 3 18V6C3 4.89543 3.89543 4 5 4H19C20.1046 4 21 4.89543 21 6V18C21 19.1046 20.1046 20 19 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M17 9H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M17 13H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M13 17H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Market News
+          </button>
+
           <button className="logout-btn" onClick={() => {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
