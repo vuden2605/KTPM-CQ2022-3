@@ -54,6 +54,7 @@ class NewsInfo(BaseModel):
     title: str
     sentiment_score: float
     is_breaking: bool
+    content: Optional[str] = ""  # New field for content
 
 
 class PredictResponse(BaseModel):
@@ -154,7 +155,8 @@ def get_news_endpoint(symbol: str = "BTCUSDT", hours: int = 1):
                 timestamp=news.get('timestamp', datetime.utcnow()).isoformat() if isinstance(news.get('timestamp'), datetime) else str(news.get('timestamp', '')),
                 title=news.get('title', ''),
                 sentiment_score=news.get('sentiment_score', 0.5),
-                is_breaking=news.get('is_breaking', False)
+                is_breaking=news.get('is_breaking', False),
+                content=news.get('content', '')  # Add content
             ))
         
         print(f"✓ Fetched {len(news_info_list)} news for {symbol}")
@@ -264,7 +266,8 @@ def predict_endpoint(request: PredictRequest):
                 timestamp=news.get('timestamp', datetime.utcnow()).isoformat() if isinstance(news.get('timestamp'), datetime) else str(news.get('timestamp', '')),
                 title=news.get('title', ''),
                 sentiment_score=news.get('sentiment_score', 0.5),
-                is_breaking=news.get('is_breaking', False)
+                is_breaking=news.get('is_breaking', False),
+                content=news.get('content', '')  # Add content
             ))
         
         # ===== STEP 6: RETURN RESPONSE =====

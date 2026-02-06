@@ -60,13 +60,14 @@ def fetch_all_news(symbol: str, hours: int = 1) -> List[Dict]:
                     'title': doc.get('Title', ''),
                     'sentiment_score': float(doc.get('SentimentScore', 0.5)),
                     'sentiment_label': doc.get('SentimentLabel', 'neutral'),
+                    'content': doc.get('Content', ''),  # Fetch content
                     'is_breaking': extra.get('isBreaking', False),
                     'breaking_score': float(extra.get('breakingScore', 0))
                 })
         
         client.close()
         
-        print(f"✓ Fetched {len(news_list)} news for {symbol} in last {hours}h")
+        print(f"✓ Fetched {len(news_list)} news for {symbol} in last {hours}h (with content)")
         return news_list
     
     except Exception as e:
