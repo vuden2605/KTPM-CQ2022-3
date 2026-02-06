@@ -150,9 +150,18 @@ def get_news_endpoint(symbol: str = "BTCUSDT", hours: int = 1):
         # Convert to NewsInfo format
         news_info_list = []
         for news in news_list:
+            ts = news.get('timestamp', datetime.utcnow())
+            if isinstance(ts, datetime):
+                 # Assume UTC if naive, append Z
+                 ts_str = ts.isoformat()
+                 if not ts.tzinfo and not ts_str.endswith('Z'):
+                     ts_str += 'Z'
+            else:
+                 ts_str = str(news.get('timestamp', ''))
+
             news_info_list.append(NewsInfo(
                 news_id=str(news.get('news_id', '')),
-                timestamp=news.get('timestamp', datetime.utcnow()).isoformat() if isinstance(news.get('timestamp'), datetime) else str(news.get('timestamp', '')),
+                timestamp=ts_str,
                 title=news.get('title', ''),
                 sentiment_score=news.get('sentiment_score', 0.5),
                 is_breaking=news.get('is_breaking', False),
@@ -261,9 +270,17 @@ def predict_endpoint(request: PredictRequest):
         
         top_news_info = []
         for news in top_news:
+            ts = news.get('timestamp', datetime.utcnow())
+            if isinstance(ts, datetime):
+                 ts_str = ts.isoformat()
+                 if not ts.tzinfo and not ts_str.endswith('Z'):
+                     ts_str += 'Z'
+            else:
+                 ts_str = str(news.get('timestamp', ''))
+
             top_news_info.append(NewsInfo(
                 news_id=str(news.get('news_id', '')),
-                timestamp=news.get('timestamp', datetime.utcnow()).isoformat() if isinstance(news.get('timestamp'), datetime) else str(news.get('timestamp', '')),
+                timestamp=ts_str,
                 title=news.get('title', ''),
                 sentiment_score=news.get('sentiment_score', 0.5),
                 is_breaking=news.get('is_breaking', False),
