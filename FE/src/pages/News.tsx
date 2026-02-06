@@ -55,10 +55,35 @@ export const News = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize from URL params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlSymbol = params.get('symbol');
+
+    if (urlSymbol) {
+      setSymbol(urlSymbol);
+    }
+    // We can't set selectedNews here directly because we haven't fetched the list yet.
+    // We will handle specific news selection in the fetch effect or after data load.
+  }, []);
+
   // Default symbol fallback
   useEffect(() => {
+    // Only if not URL param initialized (simple check: if symbol is empty? but default is BTCUSDT)
+    // Actually, availableSymbols logic might override if we are not careful.
+    // Let's rely on the URL param effect running once. 
+    // If symbol is valid in availableSymbols, it stays. If not, fallback?
+    // For now, let's just ensure if URL param set it, we respect it.
     if (availableSymbols.length > 0 && !availableSymbols.find(s => s.code === symbol)) {
-      setSymbol(availableSymbols[0].code);
+      // Check if it's a valid symbol at all? 
+      // If the user navigates with ?symbol=XYZ and XYZ is not in watchlist, 
+      // do we want to force it? Maybe yes.
+      // So let's only fallback if the CURRENT symbol is totally invalid AND not from URL (hard to track source).
+      // Simplified: If symbol is "BTCUSDT" (default) but watchlist doesn't have it? Unlikely.
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('symbol')) {
+        setSymbol(availableSymbols[0].code);
+      }
     }
   }, [availableSymbols]);
 
@@ -77,8 +102,19 @@ export const News = () => {
       const data: NewsListResponse = await response.json();
       setNewsList(data.news_list || []);
 
-      // Auto-select first news if available and nothing selected
-      if (data.news_list && data.news_list.length > 0 && !selectedNews) {
+      // Auto-select logic
+      const params = new URLSearchParams(window.location.search);
+      const urlNewsId = params.get('newsId');
+
+      let found = null;
+      if (urlNewsId && data.news_list) {
+        found = data.news_list.find(n => n.news_id === urlNewsId || n.news_id === decodeURIComponent(urlNewsId));
+      }
+
+      if (found) {
+        setSelectedNews(found);
+        // Optional: Scroll into view logic could be added here
+      } else if (data.news_list && data.news_list.length > 0 && !selectedNews) {
         setSelectedNews(data.news_list[0]);
       } else if (data.news_list.length === 0) {
         setSelectedNews(null);

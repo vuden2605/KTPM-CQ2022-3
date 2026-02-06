@@ -218,9 +218,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // Check if this time has a news item
       const newsId = newsMapRef.current.get(Number(t));
       if (newsId) {
-        // Navigate to news page
-        navigate('/news');
-        // In future: navigate(\`/news?id=\${newsId}\`) 
+        // Navigate to news page with specific news selected
+        navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(newsId)}`);
       }
     };
     (chart as any).subscribeClick(onClick);
@@ -521,7 +520,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           newsMapRef.current.clear();
 
           data.news_list.forEach((n: any) => {
-            const t = Math.floor(new Date(n.timestamp).getTime() / 1000);
+            let t = Math.floor(new Date(n.timestamp).getTime() / 1000);
+
+            // Align timestamp to the grid of the current interval
+            if (intervalSeconds > 0) {
+              const remainder = t % intervalSeconds;
+              t = t - remainder;
+            }
+
             // Store mapping
             newsMapRef.current.set(t, n.news_id);
 
