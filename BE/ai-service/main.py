@@ -67,6 +67,14 @@ class PredictResponse(BaseModel):
     timestamp: str
 
 
+class NewsListResponse(BaseModel):
+    symbol: str
+    hours: int
+    total_news: int
+    news_list: List[NewsInfo]
+    timestamp: str
+
+
 # ============================================
 # HEALTH CHECK
 # ============================================
@@ -80,6 +88,7 @@ async def root():
         "approach": "window-based",
         "endpoints": {
             "predict": "/api/predict",
+            "news": "/api/news",
             "health": "/health"
         }
     }
@@ -91,6 +100,84 @@ async def health():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat()
     }
+
+
+# ============================================
+# NEWS ENDPOINT
+# ============================================
+
+@app.get("/api/news", response_model=NewsListResponse)
+def get_news_endpoint(symbol: str = "BTCUSDT", hours: int = 1):
+    """
+    Lấy danh sách tin tức trong x giờ gần đây
+    
+    Args:
+        symbol: Symbol của crypto (BTCUSDT, ETHUSDT, ...)
+        hours: Số giờ lấy tin tức gần đây (default: 1)
+    
+    Returns:
+        NewsListResponse với danh sách tin tức
+    """
+    try:
+        # Validate hours
+        if hours < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="hours phải lớn hơn 0"
+            )
+        
+        if hours > 168:  # 1 tuần
+            raise HTTPException(
+                status_code=400,
+                detail="hours không được vượt quá 168 (1 tuần)"
+            )
+        
+        # Fetch news
+        print(f"\n[GET NEWS] Fetching news for {symbol} ({hours}h)...")
+        news_list = fetch_all_news(symbol, hours)
+        
+        if not news_list:
+            # Nếu không có tin, vẫn trả về response với empty list
+            return NewsListResponse(
+                symbol=symbol,
+                hours=hours,
+                total_news=0,
+                news_list=[],
+                timestamp=datetime.utcnow().isoformat()
+            )
+        
+        # Convert to NewsInfo format
+        news_info_list = []
+        for news in news_list:
+            news_info_list.append(NewsInfo(
+                news_id=str(news.get('news_id', '')),
+                timestamp=news.get('timestamp', datetime.utcnow()).isoformat() if isinstance(news.get('timestamp'), datetime) else str(news.get('timestamp', '')),
+                title=news.get('title', ''),
+                sentiment_score=news.get('sentiment_score', 0.5),
+                is_breaking=news.get('is_breaking', False)
+            ))
+        
+        print(f"✓ Fetched {len(news_info_list)} news for {symbol}")
+        
+        return NewsListResponse(
+            symbol=symbol,
+            hours=hours,
+            total_news=len(news_info_list),
+            news_list=news_info_list,
+            timestamp=datetime.utcnow().isoformat()
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"\n❌ Error fetching news: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 
 # ============================================
