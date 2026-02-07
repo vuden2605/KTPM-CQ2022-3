@@ -12,6 +12,7 @@ import com.example.market_service.repository.UserRepository;
 import com.example.market_service.service.AuthenticationService.IAuthenticationService;
 import com.example.market_service.service.JwtService;
 import com.example.market_service.service.TokenCacheService;
+import com.example.market_service.service.VipService.IVipService;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -35,6 +36,8 @@ public class AuthenticationServiceImpl implements IAuthenticationService {
 
 	private final TokenCacheService tokenCacheService;
 
+	private final IVipService vipService; // Injected IVipService
+
 	@Value("${google.clientId}")
 	private String googleClientId;
 
@@ -44,6 +47,8 @@ public class AuthenticationServiceImpl implements IAuthenticationService {
 		if (!user.getPassword().equals(request.getPassword())) {
 			throw new AppException(ErrorCode.INVALID_PASSWORD);
 		}
+		// Call checkExpiredVip
+		vipService.checkExpiredVip(user);
 		String accessToken = jwtService.generateAccessToken(user);
 		String refreshToken = jwtService.generateRefreshToken(user);
 		return AuthenticationResponse.builder()
@@ -66,6 +71,8 @@ public class AuthenticationServiceImpl implements IAuthenticationService {
 			String email = googleIdToken.getPayload().getEmail();
 			User user = userRepository.findByEmail(email)
 					.orElseGet(() -> createUserFromGoogle(googleIdToken));
+			// Call checkExpiredVip
+			vipService.checkExpiredVip(user);
 			String accessToken = jwtService.generateAccessToken(user);
 			String refreshToken = jwtService.generateRefreshToken(user);
 			return AuthenticationResponse.builder()

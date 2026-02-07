@@ -91,6 +91,6 @@ vnpay:
   tmn-code: J7ONSQWU
   hash-secret: Z06DUF32BD8DMAEVP8M6V3A2DNU6SFLO
   pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-  return-url: http://localhost:5173
+  return-url: http://localhost:5173/payment-result
 
 

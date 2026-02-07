@@ -46,6 +46,12 @@ public class UserServiceImpl implements IUserService {
 		return userMapper.toResponse(userRepository.save(user));
 	}
 
+	public UserResponse getUserProfile(Long userId) {
+		return userRepository.findById(userId)
+				.map(userMapper::toResponse)
+				.orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+	}
+
 	public List<UserResponse> getAllUsers() {
 		return userRepository.findAll().stream()
 				.map(userMapper::toResponse)
@@ -58,8 +64,13 @@ public class UserServiceImpl implements IUserService {
 
 		if (user.getRole() == Role.VIP) {
 			user.setRole(Role.USER);
+			user.setVipEndAt(null);
+			user.setVipStartAt(null);
 		} else if (user.getRole() == Role.USER) {
 			user.setRole(Role.VIP);
+			// Manual toggle by Admin -> Unlimited (null expiration)
+			user.setVipStartAt(java.time.LocalDateTime.now());
+			user.setVipEndAt(null);
 		}
 		// If ADMIN, ignore or toggle? Let's assume we don't toggle ADMIN.
 

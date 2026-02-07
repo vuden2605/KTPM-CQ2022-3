@@ -9,6 +9,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Slf4j
 public class PaymentController {
 	private final IPaymentService paymentService;
+
 	@PostMapping
 	public ApiResponse<String> createPayment(@RequestBody PaymentCreationRequest request) {
 		log.info("Received payment creation request: {}", request);
@@ -24,6 +26,14 @@ public class PaymentController {
 		return ApiResponse.<String>builder()
 				.message("Payment created successfully")
 				.data(paymentService.createPayment(userId, request.getVipPackageId(), request.getPaymentMethod()))
+				.build();
+	}
+
+	@PostMapping("/finalize")
+	public ApiResponse<String> finalizePayment(@RequestParam String responseCode, @RequestParam String orderId) {
+		paymentService.finalizePayment(responseCode, orderId);
+		return ApiResponse.<String>builder()
+				.message("Payment finalized successfully")
 				.build();
 	}
 }

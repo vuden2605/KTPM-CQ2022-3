@@ -84,6 +84,31 @@ export const Dashboard = () => {
             </button>
           )}
 
+          {localStorage.getItem('role') !== 'VIP' && localStorage.getItem('role') !== 'ADMIN' && (
+            <button
+              className="upgrade-btn-header"
+              onClick={() => navigate('/upgrade')}
+              style={{
+                marginRight: '10px',
+                padding: '8px 12px',
+                background: 'linear-gradient(45deg, #f39c12, #d35400)',
+                border: 'none',
+                borderRadius: '4px',
+                color: 'white',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontWeight: 'bold'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="white" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Upgrade VIP
+            </button>
+          )}
+
           <button
             className="news-btn"
             onClick={() => navigate('/news')}

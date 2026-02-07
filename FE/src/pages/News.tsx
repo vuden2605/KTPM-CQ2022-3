@@ -289,8 +289,8 @@ export const News = () => {
                     }}
                   >
                     <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                      <span>{new Date(item.timestamp).toLocaleString()}</span>
-                      {item.is_breaking && (
+                      <span>Published at: {new Date(item.timestamp).toLocaleString()}</span>
+                      {item.is_breaking && (new Date(item.timestamp).getTime() > Date.now() - 12 * 60 * 60 * 1000) && (
                         <span style={{ color: '#e74c3c', fontWeight: 700 }}>BREAKING</span>
                       )}
                     </div>
@@ -341,10 +341,10 @@ export const News = () => {
                     borderBottom: '1px solid var(--border-color)',
                     paddingBottom: '16px'
                   }}>
-                    <span>{new Date(selectedNews.timestamp).toLocaleString()}</span>
+                    <span>Published at: {new Date(selectedNews.timestamp).toLocaleString()}</span>
                     <span>|</span>
                     <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {selectedNews.author && selectedNews.author !== 'Unknown' ? selectedNews.author : 'Unknown Author'}
+                      Author: {selectedNews.author && selectedNews.author !== 'Unknown' ? selectedNews.author : 'Unknown'}
                     </span>
                     <span>|</span>
                     <span style={{

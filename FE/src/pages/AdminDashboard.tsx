@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: 'ADMIN' | 'USER' | 'VIP';
   isActive: boolean;
+  vipEndAt?: string;
 }
 
 export const AdminDashboard = () => {
@@ -69,7 +70,11 @@ export const AdminDashboard = () => {
       if (response.ok) {
         const result = await response.json();
         // Update local state to reflect change immediately
-        setUsers(users.map(u => u.id === userId ? { ...u, role: result.data.role } : u));
+        setUsers(users.map(u => u.id === userId ? {
+          ...u,
+          role: result.data.role,
+          vipEndAt: result.data.vipEndAt
+        } : u));
       } else {
         alert('Cập nhật thất bại');
       }
@@ -133,6 +138,7 @@ export const AdminDashboard = () => {
                   <th>Email</th>
                   <th>Role</th>
                   <th>VIP Access</th>
+                  <th>Expiration</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,6 +163,9 @@ export const AdminDashboard = () => {
                           <span className="slider"></span>
                         </label>
                       )}
+                    </td>
+                    <td>
+                      {user.vipEndAt ? new Date(user.vipEndAt).toLocaleDateString() : '-'}
                     </td>
                   </tr>
                 ))}

@@ -22,8 +22,27 @@ public class VipServiceImpl implements IVipService {
 	public void upgradeVip(User user, VipPackage vipPackage) {
 		user.setRole(Role.VIP);
 		LocalDateTime now = LocalDateTime.now();
-		user.setVipStartAt(now);
-		user.setVipEndAt(now.plusDays(vipPackage.getDurationDays()));
+		// If already VIP and not expired, extend logic could be here, but for now just
+		// reset start/end
+		// Or if we want to stack duration:
+		if (user.getVipEndAt() != null && user.getVipEndAt().isAfter(now)) {
+			user.setVipEndAt(user.getVipEndAt().plusDays(vipPackage.getDurationDays()));
+		} else {
+			user.setVipStartAt(now);
+			user.setVipEndAt(now.plusDays(vipPackage.getDurationDays()));
+		}
 		userRepository.save(user);
+	}
+
+	@Override
+	public void checkExpiredVip(User user) {
+		if (user.getRole() == Role.VIP && user.getVipEndAt() != null) {
+			if (user.getVipEndAt().isBefore(LocalDateTime.now())) {
+				user.setRole(Role.USER);
+				user.setVipEndAt(null);
+				user.setVipStartAt(null);
+				userRepository.save(user);
+			}
+		}
 	}
 }

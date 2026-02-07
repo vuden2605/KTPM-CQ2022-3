@@ -46,6 +46,15 @@ public class UserController {
 
 	}
 
+	@GetMapping("/my-profile")
+	public ApiResponse<UserResponse> getMyProfile() {
+		Long userId = Long.parseLong(SecurityContextHolder.getContext().getAuthentication().getName());
+		return ApiResponse.<UserResponse>builder()
+				.message("User profile retrieved successfully")
+				.data(userServiceImpl.getUserProfile(userId))
+				.build();
+	}
+
 	@GetMapping
 	@PreAuthorize("hasRole('ADMIN')")
 	public ApiResponse<List<UserResponse>> getAllUsers() {

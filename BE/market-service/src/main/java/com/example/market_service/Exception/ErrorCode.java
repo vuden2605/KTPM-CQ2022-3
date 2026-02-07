@@ -18,7 +18,8 @@ public enum ErrorCode {
 	GOOGLE_LOGIN_FAILED(1004, "Google login failed", HttpStatus.UNAUTHORIZED),
 	INVALID_REFRESH_TOKEN(1005, "Invalid refresh token", HttpStatus.UNAUTHORIZED),
 	VIP_PACKAGE_NOT_FOUND(2001, "VIP package not found", HttpStatus.NOT_FOUND),
-	USER_NOT_FOUND(1001, "User not found", HttpStatus.NOT_FOUND);
+	USER_NOT_FOUND(1001, "User not found", HttpStatus.NOT_FOUND),
+	PAYMENT_NOT_FOUND(3001, "Payment not found", HttpStatus.NOT_FOUND);
 
 	private final Integer code;
 	private final String message;

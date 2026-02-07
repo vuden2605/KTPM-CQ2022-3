@@ -5,4 +5,6 @@ import com.example.market_service.entity.VipPackage;
 
 public interface IVipService {
 	void upgradeVip(User user, VipPackage vipPackage);
+
+	void checkExpiredVip(User user);
 }
