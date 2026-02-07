@@ -48,6 +48,14 @@ export const CandlestickChart = ({
     hasNews?: boolean | null;
   }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null, sma: null, ema: null, hasNews: null });
 
+  // News Widget State
+  const [showNewsPopover, setShowNewsPopover] = useState(false);
+  const [newsList, setNewsList] = useState<any[]>([]);
+
+  // Ref for the latest candle time to anchor the button
+  const latestTimeRef = useRef<Time | null>(null);
+  const buttonContainerRef = useRef<HTMLDivElement>(null);
+
   // Metrics refs
   const messagesInRef = useRef(0);
   const droppedRef = useRef(0);
@@ -167,6 +175,35 @@ export const CandlestickChart = ({
     // ------------------
 
     chartRef.current = chart;
+
+    // Helper to update button position
+    const updateButtonPosition = () => {
+      if (!buttonContainerRef.current || !chartRef.current || !latestTimeRef.current) return;
+
+      const chart = chartRef.current;
+      const timeScale = (chart as any).timeScale();
+      const x = timeScale.timeToCoordinate(latestTimeRef.current);
+
+      if (x === null) {
+        // Off screen or invalid
+        buttonContainerRef.current.style.display = 'none';
+        return;
+      }
+
+      // Show and position
+      // Center horizontally on the candle X
+      // Volume pane is bottom 20%, so center is ~10% from bottom. 
+      // Chart height is dynamic, but CSS bottom: '10%' works relative to container.
+      buttonContainerRef.current.style.display = 'flex';
+      buttonContainerRef.current.style.left = `${x}px`;
+      // Adjust transform to center the button (width 24px -> -12px)
+      buttonContainerRef.current.style.transform = 'translateX(-50%)';
+    };
+
+    // Subscribe to time scale changes (scrolling/panning)
+    (chart as any).timeScale().subscribeVisibleTimeRangeChange(() => {
+      updateButtonPosition();
+    });
 
     // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
     const onCrosshair = (param: any) => {
@@ -493,6 +530,13 @@ export const CandlestickChart = ({
         let out = sanitizeAndClamp(seed, true);
         seed.length = 0;
         seed.push(...out);
+
+        // Update latestTimeRef when seed updates
+        if (seed.length > 0) {
+          latestTimeRef.current = seed[seed.length - 1].time as Time;
+          updateButtonPosition();
+        }
+
         try {
           candlestickSeries.setData(seed as any);
 
@@ -540,14 +584,17 @@ export const CandlestickChart = ({
     const fetchNewsMarkers = async () => {
       try {
         const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
-        // Fetch last 48h news
-        const resp = await fetch(`${API_BASE}/api/ai/news?symbol=${symbol}&hours=48`);
+        // Fetch last 24h news
+        const resp = await fetch(`${API_BASE}/api/ai/news?symbol=${symbol}&hours=24`);
         if (!resp.ok) return;
         const data = await resp.json();
         // data.news_list is Array<NewsInfo>
         if (data && data.news_list) {
           const markers: SeriesMarker<Time>[] = [];
           newsMapRef.current.clear();
+
+          // Store latest news for the widget
+          setNewsList(data.news_list.slice(0, 3)); // Keep top 3
 
           data.news_list.forEach((n: any) => {
             let t = Math.floor(new Date(n.timestamp).getTime() / 1000);
@@ -604,6 +651,8 @@ export const CandlestickChart = ({
           if (!isUnmounted) {
             candlestickSeries.update(candleData as any);
             seed.push(candleData);
+            latestTimeRef.current = candleData.time as Time;
+            updateButtonPosition();
           }
         } catch (e) {
           console.error('mock update error', e);
@@ -686,6 +735,13 @@ export const CandlestickChart = ({
                 times: (seed as any).map((s: any) => ({ time: s.time, type: typeof s.time })),
               });
               candlestickSeries.setData(sanitizeAndClamp(seed, false) as any);
+            }
+
+            // Initial button positioning
+            if (seed.length > 0) {
+              latestTimeRef.current = seed[seed.length - 1].time as Time;
+              // Small timeout to allow chart to render/layout before calculating coordinate
+              setTimeout(updateButtonPosition, 0);
             }
           }
         } catch (e) {
@@ -891,6 +947,131 @@ export const CandlestickChart = ({
             .text-down { color: #ef5350; }
           `}</style>
       </div>
+      {/* Lightning News Widget */}
+      <div
+        ref={buttonContainerRef}
+        style={{
+          position: 'absolute',
+          bottom: '5%', // Lower position in volume pane
+          left: 0, // Controlled by JS
+          zIndex: 50,
+          display: 'none', // Initially hidden until positioned
+          flexDirection: 'column',
+          alignItems: 'center', // Center popover relative to button
+          pointerEvents: 'none'
+        }}
+      >
+        {/* Popover */}
+        {showNewsPopover && (
+          <div
+            style={{
+              pointerEvents: 'auto',
+              marginBottom: 10,
+              width: 320,
+              maxHeight: 400,
+              backgroundColor: '#1E222D',
+              border: '1px solid #2B2F3A',
+              borderRadius: 6,
+              boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid #2B2F3A',
+              color: '#F0B90B',
+              fontWeight: 600,
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <span>⚡</span> Relevant News
+            </div>
+
+            {/* List */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {newsList.length === 0 ? (
+                <div style={{ padding: 16, color: '#787b86', fontSize: 13, textAlign: 'center' }}>
+                  No recent news found for {symbol}
+                </div>
+              ) : (
+                newsList.map((news) => (
+                  <div
+                    key={news.news_id}
+                    onClick={() => navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(news.news_id)}`)}
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: '1px solid #2B2F3A',
+                      cursor: 'pointer',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2A2E39'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <div style={{ color: '#EAECEF', fontSize: 13, marginBottom: 4, lineHeight: '1.4' }}>
+                      {news.title}
+                    </div>
+                    <div style={{ color: '#787b86', fontSize: 11 }}>
+                      {new Date(news.timestamp).toLocaleString()}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              onClick={() => navigate(`/news?symbol=${symbol}`)}
+              style={{
+                padding: '10px',
+                textAlign: 'center',
+                borderTop: '1px solid #2B2F3A',
+                color: '#3498db',
+                fontSize: 12,
+                cursor: 'pointer',
+                fontWeight: 500,
+                backgroundColor: '#1E222D',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2A2E39'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1E222D'}
+            >
+              See More Events ➜
+            </div>
+          </div>
+        )}
+
+        {/* Button */}
+        <button
+          onClick={() => setShowNewsPopover(!showNewsPopover)}
+          style={{
+            pointerEvents: 'auto',
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            backgroundColor: showNewsPopover ? '#2A2E39' : '#1E222D', // Subtle dark change
+            border: showNewsPopover ? '1px solid #F0B90B' : '1px solid #2B2F3A',
+            color: '#F0B90B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 12,
+            lineHeight: 1, // Ensure vertical centering
+            padding: 0,    // Remove browser default padding
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+          title="Related News"
+        >
+          ⚡
+        </button>
+      </div>
+
     </div>
   );
 };

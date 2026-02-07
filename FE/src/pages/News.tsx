@@ -76,20 +76,12 @@ export const News = () => {
     // If symbol is valid in availableSymbols, it stays. If not, fallback?
     // For now, let's just ensure if URL param set it, we respect it.
     if (availableSymbols.length > 0 && !availableSymbols.find(s => s.code === symbol) && symbol !== 'ALL') {
-      // Check if it's a valid symbol at all? 
-      // If the user navigates with ?symbol=XYZ and XYZ is not in watchlist, 
-      // do we want to force it? Maybe yes.
-      // So let's only fallback if the CURRENT symbol is totally invalid AND not from URL (hard to track source).
-      // Simplified: If symbol is "BTCUSDT" (default) but watchlist doesn't have it? Unlikely.
       const params = new URLSearchParams(window.location.search);
       if (!params.get('symbol')) {
         setSymbol('ALL'); // Default to ALL if current symbol invalid in context
       }
-    } else if (availableSymbols.length === 0 && symbol !== 'ALL') {
-      // Safety: If no symbols, default to ALL (or maybe we should just allow custom input?)
-      // But for now, ALL is safe.
-      setSymbol('ALL');
     }
+    // Removed aggressive fallback for length === 0 to respect URL params during initial load
   }, [availableSymbols]);
 
   const fetchNews = async () => {
