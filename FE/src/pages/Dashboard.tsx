@@ -7,6 +7,8 @@ import '../App.css';
 export const Dashboard = () => {
   const [selectedSymbol, setSelectedSymbol] = useState('BTCUSDT');
   const [intervalLabel, setIntervalLabel] = useState('1m');
+  const [showSMA, setShowSMA] = useState(true);
+  const [showEMA, setShowEMA] = useState(true);
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -193,6 +195,42 @@ export const Dashboard = () => {
                   </button>
                 ))}
               </div>
+
+              {/* Indicator Toggles */}
+              <div style={{ display: 'flex', gap: 8, borderLeft: '1px solid #2b2f3a', paddingLeft: 16 }}>
+                <button
+                  onClick={() => setShowSMA(!showSMA)}
+                  style={{
+                    background: 'none',
+                    border: showSMA ? '1px solid #f1c40f' : '1px solid #444',
+                    color: showSMA ? '#f1c40f' : '#666',
+                    borderRadius: 4,
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600
+                  }}
+                  title="Toggle Simple Moving Average (20)"
+                >
+                  SMA
+                </button>
+                <button
+                  onClick={() => setShowEMA(!showEMA)}
+                  style={{
+                    background: 'none',
+                    border: showEMA ? '1px solid #3498db' : '1px solid #444',
+                    color: showEMA ? '#3498db' : '#666',
+                    borderRadius: 4,
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    fontWeight: 600
+                  }}
+                  title="Toggle Exponential Moving Average (50)"
+                >
+                  EMA
+                </button>
+              </div>
             </div>
           </div>
 
@@ -200,6 +238,8 @@ export const Dashboard = () => {
             symbol={selectedSymbol}
             intervalSeconds={labelToSeconds(intervalLabel)}
             onMetricsUpdate={setMetrics}
+            showSMA={showSMA}
+            showEMA={showEMA}
           />
         </div>
         <Watchlist

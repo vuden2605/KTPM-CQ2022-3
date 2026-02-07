@@ -12,9 +12,18 @@ interface CandlestickChartProps {
   /** if true, do not subscribe to backend WS and use mock-only mode */
   useMockOnly?: boolean;
   onMetricsUpdate?: (metrics: { messagesPerSec: number; bufferSize: number; dropped: number; fps: number }) => void;
+  showSMA?: boolean;
+  showEMA?: boolean;
 }
 
-export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false, onMetricsUpdate }: CandlestickChartProps) => {
+export const CandlestickChart = ({
+  symbol,
+  intervalSeconds = 60,
+  useMockOnly = false,
+  onMetricsUpdate,
+  showSMA = true,
+  showEMA = true
+}: CandlestickChartProps) => {
   const navigate = useNavigate();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
@@ -23,6 +32,9 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
   const newsMapRef = useRef<Map<number, string>>(new Map()); // Time (seconds) -> NewsID
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const smaSeriesRef = useRef<any>(null);
+  const emaSeriesRef = useRef<any>(null);
+
   const [hover, setHover] = useState<{
     time?: number | null;
     open?: number | null;
@@ -140,14 +152,18 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       color: '#f1c40f',
       lineWidth: 2,
       crosshairMarkerVisible: false,
+      visible: showSMA,
     });
+    smaSeriesRef.current = smaSeries;
 
     // EMA (50) - Blue
     const emaSeries = (chart as any).addLineSeries({
       color: '#3498db',
       lineWidth: 2,
       crosshairMarkerVisible: false,
+      visible: showEMA,
     });
+    emaSeriesRef.current = emaSeries;
     // ------------------
 
     chartRef.current = chart;
@@ -725,6 +741,16 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     };
   }, [symbol, intervalSeconds, useMockOnly]);
 
+  // Effect to handle toggles
+  useEffect(() => {
+    if (smaSeriesRef.current) {
+      smaSeriesRef.current.applyOptions({ visible: showSMA });
+    }
+    if (emaSeriesRef.current) {
+      emaSeriesRef.current.applyOptions({ visible: showEMA });
+    }
+  }, [showSMA, showEMA]);
+
   return (
     <div
       ref={chartContainerRef}
@@ -776,11 +802,31 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               </span>
 
               {/* Indicators Legend */}
-              <span style={{ color: '#f1c40f', marginLeft: 8 }}>
-                SMA(20) {typeof hover.sma === 'number' ? hover.sma.toFixed(2) : '-'}
+              <span
+                style={{
+                  color: showSMA ? '#f1c40f' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showSMA ? 1 : 0.5,
+                  textDecoration: showSMA ? 'none' : 'line-through'
+                }}
+              >
+                SMA(20) {showSMA && typeof hover.sma === 'number' ? hover.sma.toFixed(2) : ''}
               </span>
-              <span style={{ color: '#3498db', marginLeft: 8 }}>
-                EMA(50) {typeof hover.ema === 'number' ? hover.ema.toFixed(2) : '-'}
+              <span
+                style={{
+                  color: showEMA ? '#3498db' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showEMA ? 1 : 0.5,
+                  textDecoration: showEMA ? 'none' : 'line-through'
+                }}
+              >
+                EMA(50) {showEMA && typeof hover.ema === 'number' ? hover.ema.toFixed(2) : ''}
               </span>
 
               {/* News Hint */}
@@ -791,9 +837,37 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               )}
             </>
           ) : (
-            <span style={{ color: '#787b86' }}>
-              SMA(20) <span style={{ color: '#f1c40f' }}>-</span>  EMA(50) <span style={{ color: '#3498db' }}>-</span>
-            </span>
+            <>
+              <span style={{ color: '#787b86', marginRight: 8 }}>
+                Moving cursor to see data...
+              </span>
+              <span
+                style={{
+                  color: showSMA ? '#f1c40f' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showSMA ? 1 : 0.5,
+                  textDecoration: showSMA ? 'none' : 'line-through'
+                }}
+              >
+                SMA(20)
+              </span>
+              <span
+                style={{
+                  color: showEMA ? '#3498db' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showEMA ? 1 : 0.5,
+                  textDecoration: showEMA ? 'none' : 'line-through'
+                }}
+              >
+                EMA(50)
+              </span>
+            </>
           )}
         </div>
 
