@@ -57,7 +57,7 @@ public class PaymentServiceImpl implements IPaymentService {
 			User user = payment.getUser();
 			VipPackage vipPackage = payment.getVipPackage();
 
-			user.setRole(com.example.market_service.enums.Role.VIP);
+			user.setRole(com.example.payment_service.enums.Role.VIP);
 
 			java.time.LocalDateTime now = java.time.LocalDateTime.now();
 			if (user.getVipEndAt() != null && user.getVipEndAt().isAfter(now)) {
