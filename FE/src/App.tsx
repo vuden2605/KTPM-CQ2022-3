@@ -9,6 +9,7 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { NotFound } from './pages/NotFound';
 import { AIAnalysis } from './pages/AIAnalysis';
 import { Upgrade } from './pages/Upgrade';
+import PaymentResult from './pages/PaymentResult';
 
 function App() {
   // Check if user is authenticated
@@ -64,6 +65,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Upgrade />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/payment-result"
+          element={
+            <ProtectedRoute>
+              <PaymentResult />
             </ProtectedRoute>
           }
         />

@@ -117,3 +117,14 @@
   /* Star instead of checkmark for savings */
   color: #f39c12 !important;
 }
+
+.vip-status-banner {
+  background-color: rgba(46, 204, 113, 0.2);
+  border: 1px solid #2ecc71;
+  color: #2ecc71;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 2rem;
+  text-align: center;
+  font-size: 1.1rem;
+}

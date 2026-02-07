@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { createPayment } from '../services/payment';
+import { getMyProfile } from '../services/user';
 import '../styles/Upgrade.css';
 
 interface VipPackage {
@@ -33,20 +34,28 @@ export const Upgrade = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [vipExpiration, setVipExpiration] = useState<string | null>(null);
 
   useEffect(() => {
+    fetchUserProfile();
     const responseCode = searchParams.get('vnp_ResponseCode');
     if (responseCode === '00') {
       alert('Payment Successful! You have been upgraded to VIP.');
-      // Update local storage role if needed, or force re-login/refresh
-      // For now, let's just redirect to dashboard
-      // Ideally we should re-fetch user profile to update role in context/localstorage
       localStorage.setItem('role', 'VIP'); // Optimistic update
       navigate('/');
     } else if (responseCode) {
       setError('Payment failed or cancelled.');
     }
   }, [searchParams, navigate]);
+
+  const fetchUserProfile = async () => {
+    const profile = await getMyProfile();
+    if (profile && profile.vipEndAt) {
+      // Format date: DD/MM/YYYY
+      const date = new Date(profile.vipEndAt);
+      setVipExpiration(date.toLocaleDateString('en-GB'));
+    }
+  };
 
   const handleUpgrade = async (pkg: VipPackage) => {
     setLoading(true);
@@ -74,6 +83,14 @@ export const Upgrade = () => {
       <div className="upgrade-content">
         <h1 className="upgrade-title">Upgrade to VIP</h1>
 
+        {vipExpiration && (
+          <div className="vip-status-banner">
+            You are currently a VIP member. Expires on: <strong>{vipExpiration}</strong>
+            <br />
+            <small>Purchasing a new package will extend your duration.</small>
+          </div>
+        )}
+
         {error && <div className="error-message" style={{ marginBottom: '20px' }}>{error}</div>}
 
         <div className="packages-grid">
@@ -93,7 +110,7 @@ export const Upgrade = () => {
                 onClick={() => handleUpgrade(pkg)}
                 disabled={loading}
               >
-                {loading ? 'Processing...' : 'Pay with VNPay'}
+                {loading ? 'Processing...' : (vipExpiration ? 'Extend VIP' : 'Pay with VNPay')}
               </button>
             </div>
           ))}

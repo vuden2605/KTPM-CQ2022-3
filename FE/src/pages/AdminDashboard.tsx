@@ -8,6 +8,7 @@ interface User {
   email: string;
   role: 'ADMIN' | 'USER' | 'VIP';
   isActive: boolean;
+  vipEndAt?: string;
 }
 
 export const AdminDashboard = () => {
@@ -133,6 +134,7 @@ export const AdminDashboard = () => {
                   <th>Email</th>
                   <th>Role</th>
                   <th>VIP Access</th>
+                  <th>Expiration</th>
                 </tr>
               </thead>
               <tbody>
@@ -157,6 +159,9 @@ export const AdminDashboard = () => {
                           <span className="slider"></span>
                         </label>
                       )}
+                    </td>
+                    <td>
+                      {user.vipEndAt ? new Date(user.vipEndAt).toLocaleDateString() : '-'}
                     </td>
                   </tr>
                 ))}

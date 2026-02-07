@@ -1,0 +1,112 @@
+.payment-result-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: #1a1a1a;
+  color: #fff;
+  padding: 2rem;
+}
+
+.result-card {
+  background-color: #2c2c2c;
+  border-radius: 12px;
+  padding: 3rem;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+  max-width: 500px;
+  width: 100%;
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  display: inline-block;
+  width: 80px;
+  height: 80px;
+  line-height: 80px;
+  border-radius: 50%;
+}
+
+.success-icon {
+  background-color: rgba(46, 204, 113, 0.2);
+  color: #2ecc71;
+  border: 2px solid #2ecc71;
+}
+
+.error-icon {
+  background-color: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+}
+
+h1 {
+  margin-bottom: 1rem;
+  font-size: 2rem;
+}
+
+p {
+  color: #bbb;
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+.action-btn,
+.retry-btn,
+.back-btn {
+  padding: 0.8rem 1.5rem;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.action-btn {
+  background-color: #2ecc71;
+  color: #1a1a1a;
+}
+
+.action-btn:hover {
+  background-color: #27ae60;
+}
+
+.retry-btn {
+  background-color: #f39c12;
+  color: #1a1a1a;
+  margin-right: 1rem;
+}
+
+.retry-btn:hover {
+  background-color: #d35400;
+}
+
+.back-btn {
+  background-color: transparent;
+  border: 1px solid #777;
+  color: #ccc;
+}
+
+.back-btn:hover {
+  border-color: #fff;
+  color: #fff;
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+}
