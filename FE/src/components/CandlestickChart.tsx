@@ -52,6 +52,23 @@ export const CandlestickChart = ({
   const [showNewsPopover, setShowNewsPopover] = useState(false);
   const [newsList, setNewsList] = useState<any[]>([]);
 
+  // Click outside to close popover
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showNewsPopover &&
+        buttonContainerRef.current &&
+        !buttonContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowNewsPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNewsPopover]);
+
   // Ref for the latest candle time to anchor the button
   const latestTimeRef = useRef<Time | null>(null);
   const buttonContainerRef = useRef<HTMLDivElement>(null);
@@ -178,24 +195,24 @@ export const CandlestickChart = ({
 
     // Helper to update button position
     const updateButtonPosition = () => {
-      if (!buttonContainerRef.current || !chartRef.current || !latestTimeRef.current) return;
+      if (!buttonContainerRef.current || !chartRef.current || !latestTimeRef.current || !chartContainerRef.current) return;
 
       const chart = chartRef.current;
-      const timeScale = (chart as any).timeScale();
-      const x = timeScale.timeToCoordinate(latestTimeRef.current);
+      const x = (chart as any).timeScale().timeToCoordinate(latestTimeRef.current);
 
       if (x === null) {
-        // Off screen or invalid
+        // Off screen or invalid (null)
         buttonContainerRef.current.style.display = 'none';
         return;
       }
 
+      // Ensure button doesn't overlap the right Price Scale (Y-axis)
+      const containerWidth = chartContainerRef.current.clientWidth;
+      const safeX = Math.min(x, containerWidth - 80); // 80px buffer to clear axis
+
       // Show and position
-      // Center horizontally on the candle X
-      // Volume pane is bottom 20%, so center is ~10% from bottom. 
-      // Chart height is dynamic, but CSS bottom: '10%' works relative to container.
       buttonContainerRef.current.style.display = 'flex';
-      buttonContainerRef.current.style.left = `${x}px`;
+      buttonContainerRef.current.style.left = `${safeX}px`;
       // Adjust transform to center the button (width 24px -> -12px)
       buttonContainerRef.current.style.transform = 'translateX(-50%)';
     };
@@ -954,7 +971,7 @@ export const CandlestickChart = ({
           position: 'absolute',
           bottom: '5%', // Lower position in volume pane
           left: 0, // Controlled by JS
-          zIndex: 50,
+          zIndex: 2000,
           display: 'none', // Initially hidden until positioned
           flexDirection: 'column',
           alignItems: 'center', // Center popover relative to button
