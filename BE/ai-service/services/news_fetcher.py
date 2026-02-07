@@ -52,21 +52,31 @@ def fetch_all_news(symbol: str, hours: int = 1) -> List[Dict]:
             symbols = extra.get('symbols', [])
             trading_pairs = extra.get('trading_pairs', [])
             
-            # Check if symbol matches
-            if any(symbol_short in str(s).upper() for s in symbols + trading_pairs):
+            # Check if symbol matches (SKIP if symbol is 'ALL')
+            is_match = False
+            if symbol.upper() == 'ALL':
+                is_match = True
+            else:
+                symbol_short = symbol.replace('USDT', '').upper()
+                if any(symbol_short in str(s).upper() for s in symbols + trading_pairs):
+                    is_match = True
+
+            if is_match:
                 news_list.append({
                     'news_id': str(doc['_id']),
                     'timestamp': doc['PublishedAt'],
                     'title': doc.get('Title', ''),
                     'sentiment_score': float(doc.get('SentimentScore', 0.5)),
                     'sentiment_label': doc.get('SentimentLabel', 'neutral'),
+                    'content': doc.get('Content', ''),  # Fetch content
+                    'author': doc.get('Author', extra.get('author', 'Unknown')), # Fetch author
                     'is_breaking': extra.get('isBreaking', False),
                     'breaking_score': float(extra.get('breakingScore', 0))
                 })
         
         client.close()
         
-        print(f"✓ Fetched {len(news_list)} news for {symbol} in last {hours}h")
+        print(f"✓ Fetched {len(news_list)} news for {symbol} in last {hours}h (with content)")
         return news_list
     
     except Exception as e:

@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createChart } from 'lightweight-charts';
-import type { CandlestickData, Time } from 'lightweight-charts';
+import type { CandlestickData, Time, SeriesMarker } from 'lightweight-charts';
 import { sharedWs } from '../lib/sharedWs';
+import { calculateSMA, calculateEMA } from '../lib/indicators';
 
 interface CandlestickChartProps {
   symbol: string;
@@ -13,10 +15,12 @@ interface CandlestickChartProps {
 }
 
 export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false, onMetricsUpdate }: CandlestickChartProps) => {
+  const navigate = useNavigate();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
   const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
+  const newsMapRef = useRef<Map<number, string>>(new Map()); // Time (seconds) -> NewsID
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const [hover, setHover] = useState<{
@@ -27,7 +31,10 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     close?: number | null;
     vChange?: number | null; // value change (close - prevClose)
     vPercent?: number | null; // percent change vs prevClose
-  }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
+    sma?: number | null;
+    ema?: number | null;
+    hasNews?: boolean | null;
+  }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null, sma: null, ema: null, hasNews: null });
 
   // Metrics refs
   const messagesInRef = useRef(0);
@@ -127,16 +134,45 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       },
     });
 
+    // --- INDICATORS ---
+    // SMA (20) - Yellow
+    const smaSeries = (chart as any).addLineSeries({
+      color: '#f1c40f',
+      lineWidth: 2,
+      crosshairMarkerVisible: false,
+    });
+
+    // EMA (50) - Blue
+    const emaSeries = (chart as any).addLineSeries({
+      color: '#3498db',
+      lineWidth: 2,
+      crosshairMarkerVisible: false,
+    });
+    // ------------------
+
     chartRef.current = chart;
 
     // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
     const onCrosshair = (param: any) => {
       try {
         if (!param || !param.time) {
-          setHover({ time: null, open: null, high: null, low: null, close: null });
+          setHover({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null, sma: null, ema: null, hasNews: null });
+          document.body.style.cursor = 'default';
           return;
         }
         const seriesData = param.seriesData?.get(candlestickSeries as any);
+        const smaVal = param.seriesData?.get(smaSeries as any)?.value;
+        const emaVal = param.seriesData?.get(emaSeries as any)?.value;
+
+        // Check for news
+        const t = (param.time as any).timestamp ?? param.time;
+        const hasNews = newsMapRef.current?.has(Number(t));
+
+        // Change cursor if news exists
+        if (chartContainerRef.current) {
+          chartContainerRef.current.style.cursor = hasNews ? 'pointer' : 'crosshair';
+        }
+
         if (seriesData && typeof seriesData.open !== 'undefined') {
           const openN = Number(seriesData.open);
           const closeN = Number(seriesData.close);
@@ -162,15 +198,31 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
             close: closeN,
             vChange,
             vPercent,
+            sma: smaVal,
+            ema: emaVal,
+            hasNews,
           });
         } else {
-          setHover({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null });
+          setHover({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null, sma: smaVal, ema: emaVal, hasNews });
         }
       } catch (e) {
         // ignore
       }
     };
     const unsubCross = (chart as any).subscribeCrosshairMove(onCrosshair);
+
+    // Handle Clicks
+    const onClick = (param: any) => {
+      if (!param || !param.time || !newsMapRef.current) return;
+      const t = (param.time as any).timestamp ?? param.time;
+      // Check if this time has a news item
+      const newsId = newsMapRef.current.get(Number(t));
+      if (newsId) {
+        // Navigate to news page with specific news selected
+        navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(newsId)}`);
+      }
+    };
+    (chart as any).subscribeClick(onClick);
 
     // Handle resize - use ResizeObserver for container size changes (watchlist resize)
     const handleResize = () => {
@@ -413,6 +465,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         seed.push(...out);
         try {
           candlestickSeries.setData(seed as any);
+
           // Update volume histogram with colors matching candle direction
           const volumeData = seed.map((c: any) => ({
             time: c.time,
@@ -420,16 +473,84 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
             color: c.close >= c.open ? 'rgba(38, 166, 154, 0.5)' : 'rgba(239, 83, 80, 0.5)',
           }));
           volumeSeries.setData(volumeData);
+
+          // Update Indicators
+          const smaData = calculateSMA(seed as any, 20);
+          smaSeries.setData(smaData);
+
+          const emaData = calculateEMA(seed as any, 50);
+          emaSeries.setData(emaData);
+
         } catch (e) {
           console.warn('setData failed, retrying sanitized', e);
-          candlestickSeries.setData(sanitizeAndClamp(seed) as any);
+          const clean = sanitizeAndClamp(seed);
+          candlestickSeries.setData(clean as any);
+          // Retry indicators on clean data
+          smaSeries.setData(calculateSMA(clean as any, 20));
+          emaSeries.setData(calculateEMA(clean as any, 50));
         }
       }
 
       rafIdRef.current = requestAnimationFrame(flush);
+      rafIdRef.current = requestAnimationFrame(flush);
     };
 
     rafIdRef.current = requestAnimationFrame(flush);
+
+    // --- Update Indicators Loop ---
+    // Run periodically or hook into flush? 
+    // For performance, we can update indicators less frequently or just after seed update.
+    // Let's hook into the flush function's "if (hasOlder || normalized.length > 0)" block.
+    // Since we can't easily modify the closure of flush defined above without re-writing it, 
+    // we'll explicitly look for the place where setData is called in the `flush` replacement below.
+    // ACTUAL IMPLEMENTATION: Redefining flush to include indicator updates.
+    // (See next chunk for the redefined flush)
+
+    // --- News Markers Fetcher ---
+    const fetchNewsMarkers = async () => {
+      try {
+        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
+        // Fetch last 48h news
+        const resp = await fetch(`${API_BASE}/api/ai/news?symbol=${symbol}&hours=48`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        // data.news_list is Array<NewsInfo>
+        if (data && data.news_list) {
+          const markers: SeriesMarker<Time>[] = [];
+          newsMapRef.current.clear();
+
+          data.news_list.forEach((n: any) => {
+            let t = Math.floor(new Date(n.timestamp).getTime() / 1000);
+
+            // Align timestamp to the grid of the current interval
+            if (intervalSeconds > 0) {
+              const remainder = t % intervalSeconds;
+              t = t - remainder;
+            }
+
+            // Store mapping
+            newsMapRef.current.set(t, n.news_id);
+
+            markers.push({
+              time: t as Time,
+              position: 'aboveBar',
+              color: '#e67e22', // Orange for news
+              shape: 'arrowDown',
+              text: 'News',
+              size: 1,
+            });
+          });
+
+          markers.sort((a, b) => (a.time as number) - (b.time as number));
+          candlestickSeries.setMarkers(markers);
+        }
+      } catch (e) {
+        console.error('Failed to fetch news markers', e);
+      }
+    };
+
+    // Call news fetcher once on mount
+    fetchNewsMarkers();
 
     // If websocket never opens, start mock updates
     const startMockUpdates = () => {
@@ -653,9 +774,26 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               <span style={{ color: '#787b86' }}>
                 Vol <span className={(hover as any).vChange >= 0 ? 'text-up' : 'text-down'}>{typeof (hover as any).vChange === 'number' ? ((hover as any).vChange >= 0 ? '+' : '') + (hover as any).vChange.toFixed(2) : '-'} ({typeof (hover as any).vPercent === 'number' ? ((hover as any).vPercent >= 0 ? '+' : '') + (hover as any).vPercent.toFixed(2) + '%' : ''})</span>
               </span>
+
+              {/* Indicators Legend */}
+              <span style={{ color: '#f1c40f', marginLeft: 8 }}>
+                SMA(20) {typeof hover.sma === 'number' ? hover.sma.toFixed(2) : '-'}
+              </span>
+              <span style={{ color: '#3498db', marginLeft: 8 }}>
+                EMA(50) {typeof hover.ema === 'number' ? hover.ema.toFixed(2) : '-'}
+              </span>
+
+              {/* News Hint */}
+              {hover.hasNews && (
+                <span style={{ color: '#e67e22', marginLeft: 8, fontWeight: 'bold' }}>
+                  Click to read News ⬇
+                </span>
+              )}
             </>
           ) : (
-            <span style={{ color: '#787b86' }}>Moving cursor to see data</span>
+            <span style={{ color: '#787b86' }}>
+              SMA(20) <span style={{ color: '#f1c40f' }}>-</span>  EMA(50) <span style={{ color: '#3498db' }}>-</span>
+            </span>
           )}
         </div>
 
