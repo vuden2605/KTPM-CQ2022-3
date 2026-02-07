@@ -1,6 +1,6 @@
-package com.example.market_service.service.PaymenetService.Factory;
+package com.example.market_service.service.PaymentService.Factory;
 
-import com.example.market_service.service.PaymenetService.Provider.IPaymentProvider;
+import com.example.market_service.service.PaymentService.Provider.IPaymentProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.List;

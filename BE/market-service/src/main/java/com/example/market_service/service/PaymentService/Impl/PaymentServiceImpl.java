@@ -1,4 +1,4 @@
-package com.example.market_service.service.PaymenetService.Impl;
+package com.example.market_service.service.PaymentService.Impl;
 
 import com.example.market_service.Exception.AppException;
 import com.example.market_service.Exception.ErrorCode;
@@ -8,9 +8,9 @@ import com.example.market_service.entity.VipPackage;
 import com.example.market_service.repository.PaymentRepository;
 import com.example.market_service.repository.UserRepository;
 import com.example.market_service.repository.VipPackageRepository;
-import com.example.market_service.service.PaymenetService.Factory.PaymentProviderFactory;
-import com.example.market_service.service.PaymenetService.IPaymentService;
-import com.example.market_service.service.PaymenetService.Provider.IPaymentProvider;
+import com.example.market_service.service.PaymentService.Factory.PaymentProviderFactory;
+import com.example.market_service.service.PaymentService.IPaymentService;
+import com.example.market_service.service.PaymentService.Provider.IPaymentProvider;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;

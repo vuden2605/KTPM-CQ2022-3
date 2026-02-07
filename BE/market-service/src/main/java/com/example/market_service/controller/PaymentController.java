@@ -2,7 +2,7 @@ package com.example.market_service.controller;
 
 import com.example.market_service.dto.request.PaymentCreationRequest;
 import com.example.market_service.dto.response.ApiResponse;
-import com.example.market_service.service.PaymenetService.IPaymentService;
+import com.example.market_service.service.PaymentService.IPaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;

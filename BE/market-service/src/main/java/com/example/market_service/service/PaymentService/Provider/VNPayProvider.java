@@ -1,4 +1,4 @@
-package com.example.market_service.service.PaymenetService.Provider;
+package com.example.market_service.service.PaymentService.Provider;
 
 import com.example.market_service.Configure.VNPayConfig;
 import com.example.market_service.Utils.VNPayUtil;
