@@ -300,7 +300,7 @@ export const CandlestickChart = ({
     const MAX_BUFFER = 2000;
 
     // Helpers: sanitization/dedupe utilities used by history fetch and flush
-    const makeAscendingUnique = (arr: CandlestickData[]) => {
+    const makeAscendingUnique = (arr: CandlestickData[], simulateVolume = false) => {
       // Aggregate candles with same timestamp: keep first open, max high, min low, last close
       const map = new Map<number, CandlestickData>();
       for (const candle of arr) {
@@ -308,14 +308,33 @@ export const CandlestickChart = ({
         const existing = map.get(t);
         if (existing) {
           // Merge OHLC properly: first open, highest high, lowest low, latest close
+          const newVol = (candle as any).volume;
+          const prevVol = (existing as any).volume || 0;
+          let finalVol = newVol;
+
+          if (newVol === undefined) {
+            // If incoming has no volume, either use previous or accumulate if simulating
+            if (simulateVolume) {
+              // Simulate tick volume: smaller random increment to avoid huge spikes
+              finalVol = prevVol + (Math.random() * 0.2 + 0.1);
+            } else {
+              finalVol = prevVol;
+            }
+          }
+
           map.set(t, {
             time: t as Time,
             open: existing.open,  // keep first open
             high: Math.max(existing.high, candle.high),
             low: Math.min(existing.low, candle.low),
             close: candle.close,  // use latest close
-          });
+            volume: finalVol,
+          } as any);
         } else {
+          // If simulating and this is a new candle without volume, start with seed volume
+          if (simulateVolume && (candle as any).volume === undefined) {
+            (candle as any).volume = Math.random() * 0.2 + 0.1;
+          }
           map.set(t, candle);
         }
       }
@@ -335,7 +354,7 @@ export const CandlestickChart = ({
       return true;
     };
 
-    const sanitizeAndClamp = (arr: CandlestickData[]) => {
+    const sanitizeAndClamp = (arr: CandlestickData[], simulateVolume = false) => {
       const filtered = arr.filter((c) => validateCandle(c));
       // FILTER: only keep candles aligned to intervalSeconds (remove off-interval candles)
       const aligned = intervalSeconds > 1
@@ -351,7 +370,7 @@ export const CandlestickChart = ({
         freq.set(t, (freq.get(t) || 0) + 1);
       }
       const duplicates = aligned.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
-      const cleaned = makeAscendingUnique(aligned);
+      const cleaned = makeAscendingUnique(aligned, simulateVolume);
       if (cleaned.length > MAX_STORE) cleaned.splice(0, cleaned.length - MAX_STORE);
       const removedCount = arr.length - cleaned.length;
       const dupCount = duplicates.length;
@@ -362,11 +381,6 @@ export const CandlestickChart = ({
           kept: cleaned.length,
           removedCount,
           dupCount,
-          removedSamples: arr
-            .filter((x) => !aligned.includes(x))
-            .slice(0, 6)
-            .map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
-          duplicateSamples: duplicates.slice(0, 6).map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
         });
       }
       return cleaned;
@@ -476,7 +490,7 @@ export const CandlestickChart = ({
       if (hasOlder || normalized.length > 0) {
         // Append all new candles without merging, just sort
         seed.push(...normalized);
-        let out = sanitizeAndClamp(seed);
+        let out = sanitizeAndClamp(seed, true);
         seed.length = 0;
         seed.push(...out);
         try {
@@ -499,7 +513,7 @@ export const CandlestickChart = ({
 
         } catch (e) {
           console.warn('setData failed, retrying sanitized', e);
-          const clean = sanitizeAndClamp(seed);
+          const clean = sanitizeAndClamp(seed, true);
           candlestickSeries.setData(clean as any);
           // Retry indicators on clean data
           smaSeries.setData(calculateSMA(clean as any, 20));
@@ -614,7 +628,7 @@ export const CandlestickChart = ({
       // from `intervalSeconds` so subscriptions are made per symbol+interval.
       const backendReq = computeBackendRequest(intervalSeconds, 1);
       const intervalStr = backendReq.interval;
-      // subscribe log removed (debug)
+
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
         // Strictly require the payload to include a symbol and match expectedSymbol.
         if (!candle || !(candle as any).symbol) {
@@ -637,6 +651,7 @@ export const CandlestickChart = ({
         // bucket incoming times to the selected interval to ensure aggregation
         // (handles cases where backend may send higher-frequency ticks)
         const bucket = intervalSeconds && intervalSeconds > 1 ? Math.floor(rawT / intervalSeconds) * intervalSeconds : rawT;
+
         const cd: CandlestickData & { symbol?: string } = {
           time: bucket as Time,
           open: candle.open,
@@ -670,7 +685,7 @@ export const CandlestickChart = ({
               console.error('setData failed for fetched history; dumping times', e, {
                 times: (seed as any).map((s: any) => ({ time: s.time, type: typeof s.time })),
               });
-              candlestickSeries.setData(sanitizeAndClamp(seed) as any);
+              candlestickSeries.setData(sanitizeAndClamp(seed, false) as any);
             }
           }
         } catch (e) {

@@ -132,7 +132,11 @@ class SharedWs {
       const obj = JSON.parse(raw);
 
       // Extract candle data from message
-      const symbol = obj.symbol || obj.ticker || obj.s || obj.symbolName;
+      let symbol = obj.symbol || obj.ticker || obj.s || obj.symbolName;
+      if (!symbol && topic) {
+        const parts = topic.split(':');
+        if (parts.length > 0) symbol = parts[0];
+      }
       const time = obj.openTime ? Math.floor(obj.openTime / 1000) : obj.timestamp ? Math.floor(obj.timestamp / 1000) : Math.floor(Date.now() / 1000);
 
       // try to extract volume from various possible fields
