@@ -1015,8 +1015,22 @@ export const CandlestickChart = ({
                     <div style={{ color: '#EAECEF', fontSize: 13, marginBottom: 4, lineHeight: '1.4' }}>
                       {news.title}
                     </div>
-                    <div style={{ color: '#787b86', fontSize: 11 }}>
-                      {new Date(news.timestamp).toLocaleString()}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <div style={{ color: '#787b86', fontSize: 11 }}>
+                        {new Date(news.timestamp).toLocaleString()}
+                      </div>
+                      {news.url && (
+                        <a
+                          href={news.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#3498db', fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Read original source"
+                        >
+                          Source ↗
+                        </a>
+                      )}
                     </div>
                   </div>
                 ))

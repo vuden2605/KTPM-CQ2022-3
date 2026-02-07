@@ -8,6 +8,7 @@ interface NewsInfo {
   title: string;
   content?: string;
   author?: string; // Added author field
+  url?: string;    // Added url field
   sentiment_score: number;
   is_breaking: boolean;
 }
@@ -345,6 +346,19 @@ export const News = () => {
                     }}>
                       Sentiment Score: {selectedNews.sentiment_score.toFixed(2)}
                     </span>
+                    {selectedNews.url && (
+                      <>
+                        <span>|</span>
+                        <a
+                          href={selectedNews.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#3498db', fontWeight: 600, textDecoration: 'none' }}
+                        >
+                          Read Original ↗
+                        </a>
+                      </>
+                    )}
                   </div>
 
                   <div style={{
@@ -357,6 +371,33 @@ export const News = () => {
                       <span style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>
                         Content not available for this article.
                       </span>
+                    )}
+
+                    {selectedNews.url && (
+                      <div style={{ marginTop: '30px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+                        <a
+                          href={selectedNews.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '10px 20px',
+                            backgroundColor: '#2962ff',
+                            color: 'white',
+                            textDecoration: 'none',
+                            borderRadius: '4px',
+                            fontWeight: 600,
+                            fontSize: '14px',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#1e4bd1'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#2962ff'}
+                        >
+                          Read Full Article on Source ↗
+                        </a>
+                      </div>
                     )}
                   </div>
                 </div>
