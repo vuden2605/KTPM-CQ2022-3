@@ -41,3 +41,11 @@ spring:
             - Path=${app.api-prefix}/candles/**,${app.api-prefix}/users/**
           filters:
             - StripPrefix=2
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

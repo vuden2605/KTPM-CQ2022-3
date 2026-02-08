@@ -71,3 +71,11 @@ logging:
     root: INFO
     com.example.auth_service: DEBUG
     org.apache.kafka: INFO
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

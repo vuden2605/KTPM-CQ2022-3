@@ -53,3 +53,11 @@ logging:
   level:
     root: INFO
     com.example.payment_service: DEBUG
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
