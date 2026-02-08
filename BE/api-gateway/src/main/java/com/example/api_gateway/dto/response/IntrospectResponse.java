@@ -11,4 +11,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class IntrospectResponse {
 	private boolean isValid;
+	private String userId;
+	private String scope;
 }

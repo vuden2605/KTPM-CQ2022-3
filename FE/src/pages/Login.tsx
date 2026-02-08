@@ -56,15 +56,15 @@ export const Login = () => {
         return;
       }
 
-      // Map backend messages to friendly Vietnamese messages
+      // Map backend messages to friendly English messages
       const backendMsg = result?.message || '';
       if (backendMsg.toLowerCase().includes('unauthenticated') || backendMsg.toLowerCase().includes('user_not_found') || backendMsg.toLowerCase().includes('invalid')) {
-        setError('Tên đăng nhập hoặc mật khẩu không đúng');
+        setError('Invalid username or password');
       } else {
-        setError(backendMsg || 'Đăng nhập thất bại');
+        setError(backendMsg || 'Login failed');
       }
     } catch (err) {
-      setError('Lỗi kết nối đến server');
+      setError('Connection error');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
@@ -80,18 +80,18 @@ export const Login = () => {
       <div className="login-box">
         <div className="login-header">
           <h1>₿ Crypto Trading</h1>
-          <p>Đăng nhập vào tài khoản của bạn</p>
+          <p>Login to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="userName">Tên đăng nhập</label>
+            <label htmlFor="userName">Username</label>
             <input
               id="userName"
               type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              placeholder="Nhập tên đăng nhập"
+              placeholder="Enter your username"
               required
               autoComplete="username"
               disabled={loading}
@@ -99,13 +99,13 @@ export const Login = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Mật khẩu</label>
+            <label htmlFor="password">Password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nhập mật khẩu"
+              placeholder="Enter your password"
               required
               autoComplete="current-password"
               disabled={loading}
@@ -115,18 +115,18 @@ export const Login = () => {
           {error && <div className="error-message">{error}</div>}
 
           <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+            {loading ? 'Logging in...' : 'Login'}
           </button>
 
           <div className="register-section">
-            <span>Chưa có tài khoản?</span>
+            <span>Don't have an account?</span>
             <button
               type="button"
               className="register-link"
               onClick={handleRegisterClick}
               disabled={loading}
             >
-              Đăng ký ngay
+              Register now
             </button>
           </div>
         </form>

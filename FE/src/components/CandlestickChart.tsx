@@ -12,17 +12,33 @@ interface CandlestickChartProps {
   /** if true, do not subscribe to backend WS and use mock-only mode */
   useMockOnly?: boolean;
   onMetricsUpdate?: (metrics: { messagesPerSec: number; bufferSize: number; dropped: number; fps: number }) => void;
+  showSMA?: boolean;
+  showEMA?: boolean;
+  showNews?: boolean;
 }
 
-export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = false, onMetricsUpdate }: CandlestickChartProps) => {
+export const CandlestickChart = ({
+  symbol,
+  intervalSeconds = 60,
+  useMockOnly = false,
+  onMetricsUpdate,
+  showSMA = true,
+  showEMA = true,
+  showNews = true
+}: CandlestickChartProps) => {
   const navigate = useNavigate();
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<ReturnType<typeof createChart> | null>(null);
   const mockIntervalRef = useRef<number | null>(null);
   const incomingBufferRef = useRef<Array<CandlestickData & { symbol?: string }>>([]);
-  const newsMapRef = useRef<Map<number, string>>(new Map()); // Time (seconds) -> NewsID
+
   const rafIdRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const candlestickSeriesRef = useRef<any>(null);
+  const smaSeriesRef = useRef<any>(null);
+  const emaSeriesRef = useRef<any>(null);
+  const showNewsRef = useRef(showNews); // Track current showNews value
+
   const [hover, setHover] = useState<{
     time?: number | null;
     open?: number | null;
@@ -36,7 +52,40 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     hasNews?: boolean | null;
   }>({ time: null, open: null, high: null, low: null, close: null, vChange: null, vPercent: null, sma: null, ema: null, hasNews: null });
 
-  // Metrics refs
+  // News Widget State
+  const [showNewsPopover, setShowNewsPopover] = useState(false);
+  const [newsList, setNewsList] = useState<any[]>([]);
+
+  // Interval News Popover State (clicked marker)
+  const [intervalNews, setIntervalNews] = useState<{
+    visible: boolean;
+    items: any[];
+    x: number;
+    y: number;
+    rangeLabel: string;
+  }>({ visible: false, items: [], x: 0, y: 0, rangeLabel: '' });
+
+  // Click outside to close popover
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showNewsPopover &&
+        buttonContainerRef.current &&
+        !buttonContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowNewsPopover(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNewsPopover]);
+
+  // Ref for the latest candle time to anchor the button
+  const latestTimeRef = useRef<Time | null>(null);
+  const buttonContainerRef = useRef<HTMLDivElement>(null);
+  const newsMapRef = useRef<Map<number, any[]>>(new Map()); // Time (seconds) -> News Items
   const messagesInRef = useRef(0);
   const droppedRef = useRef(0);
   const frameCountRef = useRef(0);
@@ -134,23 +183,60 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       },
     });
 
+
+    // Assign to ref for access in other effects
+    candlestickSeriesRef.current = candlestickSeries;
+
     // --- INDICATORS ---
     // SMA (20) - Yellow
     const smaSeries = (chart as any).addLineSeries({
       color: '#f1c40f',
       lineWidth: 2,
       crosshairMarkerVisible: false,
+      visible: showSMA,
     });
+    smaSeriesRef.current = smaSeries;
 
     // EMA (50) - Blue
     const emaSeries = (chart as any).addLineSeries({
       color: '#3498db',
       lineWidth: 2,
       crosshairMarkerVisible: false,
+      visible: showEMA,
     });
+    emaSeriesRef.current = emaSeries;
     // ------------------
 
     chartRef.current = chart;
+
+    // Helper to update button position
+    const updateButtonPosition = () => {
+      if (!buttonContainerRef.current || !chartRef.current || !latestTimeRef.current || !chartContainerRef.current) return;
+
+      const chart = chartRef.current;
+      const x = (chart as any).timeScale().timeToCoordinate(latestTimeRef.current);
+
+      if (x === null) {
+        // Off screen or invalid (null)
+        buttonContainerRef.current.style.display = 'none';
+        return;
+      }
+
+      // Ensure button doesn't overlap the right Price Scale (Y-axis)
+      const containerWidth = chartContainerRef.current.clientWidth;
+      const safeX = Math.min(x, containerWidth - 80); // 80px buffer to clear axis
+
+      // Show and position
+      buttonContainerRef.current.style.display = 'flex';
+      buttonContainerRef.current.style.left = `${safeX}px`;
+      // Adjust transform to center the button (width 24px -> -12px)
+      buttonContainerRef.current.style.transform = 'translateX(-50%)';
+    };
+
+    // Subscribe to time scale changes (scrolling/panning)
+    (chart as any).timeScale().subscribeVisibleTimeRangeChange(() => {
+      updateButtonPosition();
+    });
 
     // subscribe to crosshair moves to show OHLCV(V, %) in a small overlay
     const onCrosshair = (param: any) => {
@@ -166,7 +252,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
         // Check for news
         const t = (param.time as any).timestamp ?? param.time;
-        const hasNews = newsMapRef.current?.has(Number(t));
+        // Only consider news if feature is enabled (use ref to get latest value)
+        const hasNews = showNewsRef.current && newsMapRef.current?.has(Number(t));
 
         // Change cursor if news exists
         if (chartContainerRef.current) {
@@ -213,13 +300,32 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
     // Handle Clicks
     const onClick = (param: any) => {
-      if (!param || !param.time || !newsMapRef.current) return;
+      if (!param || !param.time || !newsMapRef.current || !showNewsRef.current) return;
+
       const t = (param.time as any).timestamp ?? param.time;
-      // Check if this time has a news item
-      const newsId = newsMapRef.current.get(Number(t));
-      if (newsId) {
-        // Navigate to news page with specific news selected
-        navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(newsId)}`);
+      const tNum = Number(t);
+
+      // Check if this time has news items
+      const items = newsMapRef.current.get(tNum);
+
+      if (items && items.length > 0) {
+        // Calculate range label
+        const startDate = new Date(tNum * 1000);
+        const endDate = new Date((tNum + intervalSeconds) * 1000);
+
+        const formatTime = (d: Date) => d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        // e.g. "14:00 - 15:00" or date if interval is large
+        const rangeLabel = `${startDate.toLocaleDateString()} ${formatTime(startDate)} - ${formatTime(endDate)}`;
+
+        // Get click coordinates for positioning (optional, or center it)
+        // We'll just center it or use a fixed position like a modal
+        setIntervalNews({
+          visible: true,
+          items: items,
+          x: param.point?.x ?? 0,
+          y: param.point?.y ?? 0,
+          rangeLabel
+        });
       }
     };
     (chart as any).subscribeClick(onClick);
@@ -284,7 +390,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     const MAX_BUFFER = 2000;
 
     // Helpers: sanitization/dedupe utilities used by history fetch and flush
-    const makeAscendingUnique = (arr: CandlestickData[]) => {
+    const makeAscendingUnique = (arr: CandlestickData[], simulateVolume = false) => {
       // Aggregate candles with same timestamp: keep first open, max high, min low, last close
       const map = new Map<number, CandlestickData>();
       for (const candle of arr) {
@@ -292,14 +398,33 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         const existing = map.get(t);
         if (existing) {
           // Merge OHLC properly: first open, highest high, lowest low, latest close
+          const newVol = (candle as any).volume;
+          const prevVol = (existing as any).volume || 0;
+          let finalVol = newVol;
+
+          if (newVol === undefined) {
+            // If incoming has no volume, either use previous or accumulate if simulating
+            if (simulateVolume) {
+              // Simulate tick volume: smaller random increment to avoid huge spikes
+              finalVol = prevVol + (Math.random() * 0.2 + 0.1);
+            } else {
+              finalVol = prevVol;
+            }
+          }
+
           map.set(t, {
             time: t as Time,
             open: existing.open,  // keep first open
             high: Math.max(existing.high, candle.high),
             low: Math.min(existing.low, candle.low),
             close: candle.close,  // use latest close
-          });
+            volume: finalVol,
+          } as any);
         } else {
+          // If simulating and this is a new candle without volume, start with seed volume
+          if (simulateVolume && (candle as any).volume === undefined) {
+            (candle as any).volume = Math.random() * 0.2 + 0.1;
+          }
           map.set(t, candle);
         }
       }
@@ -319,7 +444,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       return true;
     };
 
-    const sanitizeAndClamp = (arr: CandlestickData[]) => {
+    const sanitizeAndClamp = (arr: CandlestickData[], simulateVolume = false) => {
       const filtered = arr.filter((c) => validateCandle(c));
       // FILTER: only keep candles aligned to intervalSeconds (remove off-interval candles)
       const aligned = intervalSeconds > 1
@@ -335,7 +460,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         freq.set(t, (freq.get(t) || 0) + 1);
       }
       const duplicates = aligned.filter((c) => (freq.get(Number((c as any).time)) || 0) > 1);
-      const cleaned = makeAscendingUnique(aligned);
+      const cleaned = makeAscendingUnique(aligned, simulateVolume);
       if (cleaned.length > MAX_STORE) cleaned.splice(0, cleaned.length - MAX_STORE);
       const removedCount = arr.length - cleaned.length;
       const dupCount = duplicates.length;
@@ -346,11 +471,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           kept: cleaned.length,
           removedCount,
           dupCount,
-          removedSamples: arr
-            .filter((x) => !aligned.includes(x))
-            .slice(0, 6)
-            .map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
-          duplicateSamples: duplicates.slice(0, 6).map((s) => ({ time: (s as any).time, open: (s as any).open, high: (s as any).high, low: (s as any).low, close: (s as any).close })),
         });
       }
       return cleaned;
@@ -460,9 +580,16 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       if (hasOlder || normalized.length > 0) {
         // Append all new candles without merging, just sort
         seed.push(...normalized);
-        let out = sanitizeAndClamp(seed);
+        let out = sanitizeAndClamp(seed, true);
         seed.length = 0;
         seed.push(...out);
+
+        // Update latestTimeRef when seed updates
+        if (seed.length > 0) {
+          latestTimeRef.current = seed[seed.length - 1].time as Time;
+          updateButtonPosition();
+        }
+
         try {
           candlestickSeries.setData(seed as any);
 
@@ -483,7 +610,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
 
         } catch (e) {
           console.warn('setData failed, retrying sanitized', e);
-          const clean = sanitizeAndClamp(seed);
+          const clean = sanitizeAndClamp(seed, true);
           candlestickSeries.setData(clean as any);
           // Retry indicators on clean data
           smaSeries.setData(calculateSMA(clean as any, 20));
@@ -505,52 +632,6 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     // we'll explicitly look for the place where setData is called in the `flush` replacement below.
     // ACTUAL IMPLEMENTATION: Redefining flush to include indicator updates.
     // (See next chunk for the redefined flush)
-
-    // --- News Markers Fetcher ---
-    const fetchNewsMarkers = async () => {
-      try {
-        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
-        // Fetch last 48h news
-        const resp = await fetch(`${API_BASE}/api/ai/news?symbol=${symbol}&hours=48`);
-        if (!resp.ok) return;
-        const data = await resp.json();
-        // data.news_list is Array<NewsInfo>
-        if (data && data.news_list) {
-          const markers: SeriesMarker<Time>[] = [];
-          newsMapRef.current.clear();
-
-          data.news_list.forEach((n: any) => {
-            let t = Math.floor(new Date(n.timestamp).getTime() / 1000);
-
-            // Align timestamp to the grid of the current interval
-            if (intervalSeconds > 0) {
-              const remainder = t % intervalSeconds;
-              t = t - remainder;
-            }
-
-            // Store mapping
-            newsMapRef.current.set(t, n.news_id);
-
-            markers.push({
-              time: t as Time,
-              position: 'aboveBar',
-              color: '#e67e22', // Orange for news
-              shape: 'arrowDown',
-              text: 'News',
-              size: 1,
-            });
-          });
-
-          markers.sort((a, b) => (a.time as number) - (b.time as number));
-          candlestickSeries.setMarkers(markers);
-        }
-      } catch (e) {
-        console.error('Failed to fetch news markers', e);
-      }
-    };
-
-    // Call news fetcher once on mount
-    fetchNewsMarkers();
 
     // If websocket never opens, start mock updates
     const startMockUpdates = () => {
@@ -574,6 +655,8 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
           if (!isUnmounted) {
             candlestickSeries.update(candleData as any);
             seed.push(candleData);
+            latestTimeRef.current = candleData.time as Time;
+            updateButtonPosition();
           }
         } catch (e) {
           console.error('mock update error', e);
@@ -598,7 +681,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
       // from `intervalSeconds` so subscriptions are made per symbol+interval.
       const backendReq = computeBackendRequest(intervalSeconds, 1);
       const intervalStr = backendReq.interval;
-      // subscribe log removed (debug)
+
       unsubscribe = sharedWs.subscribe(symbol, (candle) => {
         // Strictly require the payload to include a symbol and match expectedSymbol.
         if (!candle || !(candle as any).symbol) {
@@ -621,6 +704,7 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
         // bucket incoming times to the selected interval to ensure aggregation
         // (handles cases where backend may send higher-frequency ticks)
         const bucket = intervalSeconds && intervalSeconds > 1 ? Math.floor(rawT / intervalSeconds) * intervalSeconds : rawT;
+
         const cd: CandlestickData & { symbol?: string } = {
           time: bucket as Time,
           open: candle.open,
@@ -654,7 +738,14 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               console.error('setData failed for fetched history; dumping times', e, {
                 times: (seed as any).map((s: any) => ({ time: s.time, type: typeof s.time })),
               });
-              candlestickSeries.setData(sanitizeAndClamp(seed) as any);
+              candlestickSeries.setData(sanitizeAndClamp(seed, false) as any);
+            }
+
+            // Initial button positioning
+            if (seed.length > 0) {
+              latestTimeRef.current = seed[seed.length - 1].time as Time;
+              // Small timeout to allow chart to render/layout before calculating coordinate
+              setTimeout(updateButtonPosition, 0);
             }
           }
         } catch (e) {
@@ -725,6 +816,87 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
     };
   }, [symbol, intervalSeconds, useMockOnly]);
 
+  // Effect to handle toggles
+  useEffect(() => {
+    if (smaSeriesRef.current) {
+      smaSeriesRef.current.applyOptions({ visible: showSMA });
+    }
+    if (emaSeriesRef.current) {
+      emaSeriesRef.current.applyOptions({ visible: showEMA });
+    }
+  }, [showSMA, showEMA]);
+
+  // Sync showNews ref so event handlers can read the latest value
+  useEffect(() => {
+    showNewsRef.current = showNews;
+  }, [showNews]);
+
+  // Effect to fetch News Markers
+  useEffect(() => {
+    let isMounted = true;
+    const fetchNews = async () => {
+      if (!candlestickSeriesRef.current) return;
+
+      // If news is off, clear and return
+      if (!showNews) {
+        candlestickSeriesRef.current.setMarkers([]);
+        return;
+      }
+
+      try {
+        const API_BASE = (import.meta.env.VITE_API_BASE as string) || 'http://localhost:80';
+        const resp = await fetch(`${API_BASE}/api/ai/news?symbol=${symbol}&hours=24`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (!isMounted) return;
+
+        if (data && data.news_list) {
+          const markers: SeriesMarker<Time>[] = [];
+          newsMapRef.current.clear();
+
+          // Also update the permanent news list if we just fetched
+          setNewsList(data.news_list.slice(0, 3));
+
+          data.news_list.forEach((n: any) => {
+            let t = Math.floor(new Date(n.timestamp).getTime() / 1000);
+            if (intervalSeconds > 0) {
+              const remainder = t % intervalSeconds;
+              t = t - remainder;
+            }
+            if (isNaN(t)) return;
+
+            if (!newsMapRef.current.has(t)) {
+              newsMapRef.current.set(t, []);
+            }
+            newsMapRef.current.get(t)?.push(n);
+          });
+
+          newsMapRef.current.forEach((items, t) => {
+            markers.push({
+              time: t as Time,
+              position: 'aboveBar',
+              color: '#17a2b8',
+              shape: 'arrowDown',
+              text: items.length > 1 ? `News (${items.length})` : 'News',
+              size: 1,
+            });
+          });
+
+          markers.sort((a, b) => (a.time as number) - (b.time as number));
+          if (candlestickSeriesRef.current) {
+            candlestickSeriesRef.current.setMarkers(markers);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to fetch news markers', e);
+      }
+    };
+
+    fetchNews();
+
+    return () => { isMounted = false; };
+  }, [showNews, symbol, intervalSeconds]); // Re-run if these change
+
   return (
     <div
       ref={chartContainerRef}
@@ -776,11 +948,31 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               </span>
 
               {/* Indicators Legend */}
-              <span style={{ color: '#f1c40f', marginLeft: 8 }}>
-                SMA(20) {typeof hover.sma === 'number' ? hover.sma.toFixed(2) : '-'}
+              <span
+                style={{
+                  color: showSMA ? '#f1c40f' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showSMA ? 1 : 0.5,
+                  textDecoration: showSMA ? 'none' : 'line-through'
+                }}
+              >
+                SMA(20) {showSMA && typeof hover.sma === 'number' ? hover.sma.toFixed(2) : ''}
               </span>
-              <span style={{ color: '#3498db', marginLeft: 8 }}>
-                EMA(50) {typeof hover.ema === 'number' ? hover.ema.toFixed(2) : '-'}
+              <span
+                style={{
+                  color: showEMA ? '#3498db' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showEMA ? 1 : 0.5,
+                  textDecoration: showEMA ? 'none' : 'line-through'
+                }}
+              >
+                EMA(50) {showEMA && typeof hover.ema === 'number' ? hover.ema.toFixed(2) : ''}
               </span>
 
               {/* News Hint */}
@@ -791,9 +983,37 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
               )}
             </>
           ) : (
-            <span style={{ color: '#787b86' }}>
-              SMA(20) <span style={{ color: '#f1c40f' }}>-</span>  EMA(50) <span style={{ color: '#3498db' }}>-</span>
-            </span>
+            <>
+              <span style={{ color: '#787b86', marginRight: 8 }}>
+                Moving cursor to see data...
+              </span>
+              <span
+                style={{
+                  color: showSMA ? '#f1c40f' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showSMA ? 1 : 0.5,
+                  textDecoration: showSMA ? 'none' : 'line-through'
+                }}
+              >
+                SMA(20)
+              </span>
+              <span
+                style={{
+                  color: showEMA ? '#3498db' : '#787b86',
+                  marginLeft: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  opacity: showEMA ? 1 : 0.5,
+                  textDecoration: showEMA ? 'none' : 'line-through'
+                }}
+              >
+                EMA(50)
+              </span>
+            </>
           )}
         </div>
 
@@ -802,6 +1022,245 @@ export const CandlestickChart = ({ symbol, intervalSeconds = 60, useMockOnly = f
             .text-down { color: #ef5350; }
           `}</style>
       </div>
+      {/* Lightning News Widget */}
+      <div
+        ref={buttonContainerRef}
+        style={{
+          position: 'absolute',
+          bottom: '5%', // Lower position in volume pane
+          left: 0, // Controlled by JS
+          zIndex: 2000,
+          display: 'none', // Initially hidden until positioned
+          flexDirection: 'column',
+          alignItems: 'center', // Center popover relative to button
+          pointerEvents: 'none'
+        }}
+      >
+        {/* Popover */}
+        {showNewsPopover && (
+          <div
+            style={{
+              pointerEvents: 'auto',
+              marginBottom: 10,
+              width: 320,
+              maxHeight: 400,
+              backgroundColor: '#1E222D',
+              border: '1px solid #2B2F3A',
+              borderRadius: 6,
+              boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid #2B2F3A',
+              color: '#17a2b8',
+              fontWeight: 600,
+              fontSize: 14,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <span>📰</span> Relevant News
+            </div>
+
+            {/* List */}
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {newsList.length === 0 ? (
+                <div style={{ padding: 16, color: '#787b86', fontSize: 13, textAlign: 'center' }}>
+                  No recent news found for {symbol}
+                </div>
+              ) : (
+                newsList.map((news) => (
+                  <div
+                    key={news.news_id}
+                    onClick={() => navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(news.news_id)}`)}
+                    style={{
+                      padding: '12px 16px',
+                      borderBottom: '1px solid #2B2F3A',
+                      cursor: 'pointer',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2A2E39'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                  >
+                    <div style={{ color: '#EAECEF', fontSize: 13, marginBottom: 4, lineHeight: '1.4' }}>
+                      {news.title}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <div style={{ color: '#787b86', fontSize: 11 }}>
+                        {new Date(news.timestamp).toLocaleString()}
+                      </div>
+                      {news.url && (
+                        <a
+                          href={news.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: '#3498db', fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                          onClick={(e) => e.stopPropagation()}
+                          title="Read original source"
+                        >
+                          Source ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              onClick={() => navigate(`/news?symbol=${symbol}`)}
+              style={{
+                padding: '10px',
+                textAlign: 'center',
+                borderTop: '1px solid #2B2F3A',
+                color: '#3498db',
+                fontSize: 12,
+                cursor: 'pointer',
+                fontWeight: 500,
+                backgroundColor: '#1E222D',
+                pointerEvents: 'auto'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2A2E39'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1E222D'}
+            >
+              See More Events ➜
+            </div>
+          </div>
+        )}
+
+        {/* Button */}
+        <button
+          onClick={() => setShowNewsPopover(!showNewsPopover)}
+          style={{
+            pointerEvents: 'auto',
+            width: 24,
+            height: 24,
+            borderRadius: '50%',
+            backgroundColor: showNewsPopover ? '#2A2E39' : '#1E222D', // Subtle dark change
+            border: showNewsPopover ? '1px solid #17a2b8' : '1px solid #2B2F3A',
+            color: '#17a2b8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: 12,
+            lineHeight: 1, // Ensure vertical centering
+            padding: 0,    // Remove browser default padding
+            transition: 'all 0.2s',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+          title="Related News"
+        >
+          📰
+        </button>
+      </div>
+
+      {/* Interval News Modal (Click on Marker) */}
+      {intervalNews.visible && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={() => setIntervalNews(prev => ({ ...prev, visible: false }))}
+        >
+          <div
+            style={{
+              width: 320,
+              maxHeight: '80%',
+              backgroundColor: '#1E222D',
+              border: '1px solid #2B2F3A',
+              borderRadius: 8,
+              boxShadow: '0 8px 16px rgba(0,0,0,0.4)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid #2B2F3A',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              backgroundColor: '#2A2E39'
+            }}>
+              <div style={{ color: '#17a2b8', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>📰</span> News in Interval
+              </div>
+              <button
+                onClick={() => setIntervalNews(prev => ({ ...prev, visible: false }))}
+                style={{ background: 'none', border: 'none', color: '#787b86', cursor: 'pointer', fontSize: 16 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Time Range Info */}
+            <div style={{
+              padding: '8px 16px',
+              fontSize: 11,
+              color: '#787B86',
+              borderBottom: '1px solid #2B2F3A',
+              backgroundColor: '#1E222D'
+            }}>
+              Period: <span style={{ color: '#d1d4dc' }}>{intervalNews.rangeLabel}</span>
+            </div>
+
+            {/* List */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: 0 }}>
+              {intervalNews.items.map((news) => (
+                <div
+                  key={news.news_id}
+                  onClick={() => navigate(`/news?symbol=${symbol}&newsId=${encodeURIComponent(news.news_id)}`)}
+                  style={{
+                    padding: '12px 16px',
+                    borderBottom: '1px solid #2B2F3A',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#2A2E39'}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                >
+                  <div style={{ color: '#EAECEF', fontSize: 13, marginBottom: 4, lineHeight: '1.4' }}>
+                    {news.title}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <div style={{ color: '#787b86', fontSize: 11 }}>
+                      {new Date(news.timestamp).toLocaleString()}
+                    </div>
+                    {news.url && (
+                      <a
+                        href={news.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: '#3498db', fontSize: 11, textDecoration: 'none', fontWeight: 500 }}
+                        onClick={(e) => e.stopPropagation()}
+                        title="Read original source"
+                      >
+                        Source ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

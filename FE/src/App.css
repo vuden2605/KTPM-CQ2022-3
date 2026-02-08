@@ -65,8 +65,10 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
+  /* Was hidden, changed to visible for News widget popover */
   position: relative;
+  z-index: 1000;
 }
 
 /* Chart Toolbar */

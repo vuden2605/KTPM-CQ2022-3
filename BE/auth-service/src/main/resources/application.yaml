@@ -36,6 +36,18 @@ spring:
   jackson:
     time-zone: UTC
 
+  # ✅ Kafka Consumer Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: auth-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.type.mapping: "VipUpgradeEvent:com.example.auth_service.dto.event.VipUpgradeEvent"
+
 jwt:
   secret: your_jwt_secret_key_12333333333333333333333
   access-time: 360000000
@@ -43,6 +55,11 @@ jwt:
 
 google:
   clientId: ${GOOGLE_CLIENT_ID:830106511321-pfkrcmes2fqg4n102aopnjfhefftl7lp.apps.googleusercontent.com}
+
+# ✅ Kafka Topics
+kafka:
+  topics:
+    vip-upgrade-events: vip-upgrade-events
 
 cache:
   expires:
@@ -53,3 +70,12 @@ logging:
   level:
     root: INFO
     com.example.auth_service: DEBUG
+    org.apache.kafka: INFO
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

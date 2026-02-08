@@ -25,7 +25,7 @@ export const Register = () => {
     setSuccess('');
 
     if (password !== confirmPassword) {
-      setError('Mật khẩu nhập lại không khớp');
+      setError('Passwords do not match');
       return;
     }
 
@@ -45,7 +45,7 @@ export const Register = () => {
       console.debug('Register response:', result);
 
       if (response.ok) {
-        setSuccess('Đăng ký thành công! Đang chuyển hướng đến trang đăng nhập...');
+        setSuccess('Registration successful! Redirecting to login...');
         // Wait a bit before redirecting
         setTimeout(() => {
           navigate('/login');
@@ -53,15 +53,15 @@ export const Register = () => {
         return;
       }
 
-      // Map backend messages to friendly Vietnamese messages
+      // Map backend messages to friendly English messages
       const backendMsg = result?.message || '';
       if (backendMsg.toLowerCase().includes('exists')) {
-        setError('Tên đăng nhập hoặc email đã tồn tại');
+        setError('Username or email already exists');
       } else {
-        setError(backendMsg || 'Đăng ký thất bại');
+        setError(backendMsg || 'Registration failed');
       }
     } catch (err) {
-      setError('Lỗi kết nối đến server');
+      setError('Connection error');
       console.error('Register error:', err);
     } finally {
       setLoading(false);
@@ -77,18 +77,18 @@ export const Register = () => {
       <div className="register-box">
         <div className="register-header">
           <h1>₿ Crypto Trading</h1>
-          <p>Tạo tài khoản mới</p>
+          <p>Create new account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="register-form">
           <div className="form-group">
-            <label htmlFor="userName">Tên đăng nhập</label>
+            <label htmlFor="userName">Username</label>
             <input
               id="userName"
               type="text"
               value={userName}
               onChange={(e) => setUserName(e.target.value)}
-              placeholder="Nhập tên đăng nhập"
+              placeholder="Enter your username"
               required
               autoComplete="username"
               disabled={loading}
@@ -102,7 +102,7 @@ export const Register = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Nhập địa chỉ email"
+              placeholder="Enter your email"
               required
               autoComplete="email"
               disabled={loading}
@@ -110,13 +110,13 @@ export const Register = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="password">Mật khẩu</label>
+            <label htmlFor="password">Password</label>
             <input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Nhập mật khẩu"
+              placeholder="Enter your password"
               required
               autoComplete="new-password"
               disabled={loading}
@@ -124,13 +124,13 @@ export const Register = () => {
           </div>
 
           <div className="form-group">
-            <label htmlFor="confirmPassword">Nhập lại mật khẩu</label>
+            <label htmlFor="confirmPassword">Confirm Password</label>
             <input
               id="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="Nhập lại mật khẩu"
+              placeholder="Confirm your password"
               required
               autoComplete="new-password"
               disabled={loading}
@@ -141,18 +141,18 @@ export const Register = () => {
           {success && <div className="success-message">{success}</div>}
 
           <button type="submit" className="register-btn" disabled={loading}>
-            {loading ? 'Đang đăng ký...' : 'Đăng ký'}
+            {loading ? 'Registering...' : 'Register'}
           </button>
 
           <div className="login-section">
-            <span>Đã có tài khoản?</span>
+            <span>Already have an account?</span>
             <button
               type="button"
               className="login-link"
               onClick={handleLoginClick}
               disabled={loading}
             >
-              Đăng nhập ngay
+              Login now
             </button>
           </div>
         </form>

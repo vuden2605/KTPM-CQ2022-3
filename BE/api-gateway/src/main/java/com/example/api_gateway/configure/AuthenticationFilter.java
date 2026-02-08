@@ -20,23 +20,27 @@ import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
-import org.springframework.util.AntPathMatcher;
-import java.util.List;
 
+import java.util.Arrays;
+import java.util.List;
 
 @Component
 @Slf4j
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PACKAGE, makeFinal = true)
 public class AuthenticationFilter implements GlobalFilter, Ordered {
-	private static final AntPathMatcher pathMatcher = new AntPathMatcher();
+	private final AntPathMatcher pathMatcher = new AntPathMatcher();
 	AuthenticationService authenticationService;
 	ObjectMapper objectMapper;
-	private final List<String> publicUrls = List.of(
-		"/auth/**"
+
+	private final List<String> publicUrls = Arrays.asList(
+			"/auth/**",
+			"/users",
+			"/candles/**"
 	);
 
 	@NonFinal
@@ -45,14 +49,19 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-		log.info("AuthenticationFilter called");
-		if(isPublicEndpoint(exchange.getRequest())) {
+		log.info("AuthenticationFilter called for: {}", exchange.getRequest().getURI().getPath());
+
+		// Check if public endpoint
+		if (isPublicEndpoint(exchange.getRequest())) {
 			log.info("Public endpoint accessed: {}", exchange.getRequest().getURI().getPath());
 			return chain.filter(exchange);
 		}
+
+		// Extract token
 		List<String> authHeaders = exchange.getRequest().getHeaders().get(HttpHeaders.AUTHORIZATION);
 		if (CollectionUtils.isEmpty(authHeaders))
 			return unauthenticated(exchange.getResponse());
+
 		String token = authHeaders.getFirst().replace("Bearer ", "");
 		IntrospectRequest introspectRequest = IntrospectRequest.builder()
 				.token(token)
@@ -61,38 +70,56 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
 		return authenticationService.introspect(introspectRequest)
 				.flatMap(apiResponse -> {
-					if (apiResponse.getData().isValid())
-						return chain.filter(exchange);
-					else {
+					if (apiResponse.getData().isValid()) {
+						String userId = apiResponse.getData().getUserId();
+						String userRole = apiResponse.getData().getScope();
+						if (userId == null) {
+							log.error("UserId is null in introspect response");
+							return unauthenticated(exchange.getResponse());
+						}
+
+						ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
+								.header("X-User-Id", userId)
+								.header("X-User-Role", userRole)
+								.build();
+
+						log.info("Added headers X-User-Id: {}, X-User-Role: {} to request", userId, userRole);
+						ServerWebExchange modifiedExchange = exchange.mutate()
+								.request(modifiedRequest)
+								.build();
+
+
+						return chain.filter(modifiedExchange);
+					} else {
 						log.info("Invalid token: {}", token);
 						return unauthenticated(exchange.getResponse());
 					}
-				}).onErrorResume(throwable -> unauthenticated(exchange.getResponse()));
+				}).onErrorResume(throwable -> {
+					log.error("Error during authentication", throwable);
+					return unauthenticated(exchange.getResponse());
+				});
 	}
+
 	private boolean isPublicEndpoint(ServerHttpRequest request) {
 		String path = request.getURI().getPath();
-		log.info("Request path: {}", path);
 
-		return publicUrls.stream()
-				.anyMatch(publicUrl ->
-						pathMatcher.match(apiPrefix + publicUrl, path)
-				);
+		return publicUrls.stream().anyMatch(
+				publicUrl -> pathMatcher.match(apiPrefix + publicUrl, path)
+		);
 	}
-
-
 
 	@Override
 	public int getOrder() {
 		return -1;
 	}
 
-	Mono<Void> unauthenticated(ServerHttpResponse response){
+	Mono<Void> unauthenticated(ServerHttpResponse response) {
 		ApiResponse<?> apiResponse = ApiResponse.builder()
 				.code(1401)
 				.message("Unauthenticated")
 				.build();
 
-		String body = null;
+		String body;
 		try {
 			body = objectMapper.writeValueAsString(apiResponse);
 		} catch (JsonProcessingException e) {

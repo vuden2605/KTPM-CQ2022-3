@@ -70,6 +70,7 @@ def fetch_all_news(symbol: str, hours: int = 1) -> List[Dict]:
                     'sentiment_label': doc.get('SentimentLabel', 'neutral'),
                     'content': doc.get('Content', ''),  # Fetch content
                     'author': doc.get('Author', extra.get('author', 'Unknown')), # Fetch author
+                    'url': doc.get('Url', ''),  # Fetch URL
                     'is_breaking': extra.get('isBreaking', False),
                     'breaking_score': float(extra.get('breakingScore', 0))
                 })

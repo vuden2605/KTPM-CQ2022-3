@@ -41,11 +41,4 @@ public class Payment {
 	@CreationTimestamp
 	@Column(name = "created_at", nullable = false, updatable = false)
 	private Instant createdAt;
-
-
-	@Transient
-	private User user;
-
-	@Transient
-	private VipPackage vipPackage;
 }

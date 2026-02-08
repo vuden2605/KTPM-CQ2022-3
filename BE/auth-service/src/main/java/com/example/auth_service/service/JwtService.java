@@ -87,8 +87,12 @@ public class JwtService {
 	public IntrospectResponse introspectToken(IntrospectRequest request) {
 		String token = request.getToken();
 		try {
-			verifyToken(token);
-			return IntrospectResponse.builder().isValid(true).build();
+			Claims claims = verifyToken(token);
+			return IntrospectResponse.builder()
+					.isValid(true)
+					.userId(claims.getSubject())
+					.scope((String) claims.get("scope"))
+					.build();
 		} catch (JwtException e) {
 			return IntrospectResponse.builder().isValid(false).build();
 		}

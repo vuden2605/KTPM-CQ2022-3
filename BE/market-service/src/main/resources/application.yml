@@ -64,12 +64,7 @@ cache:
     "[recent-candles-1d]": 6h
     "[user.details]": 1m
     "[auth.invalidatedTokens]": 24h
-jwt:
-  secret: your_jwt_secret_key_12333333333333333333333
-  access-time: 360000000
-  refresh-time: 864000000
-google:
-  clientId: ${GOOGLE_CLIENT_ID:830106511321-pfkrcmes2fqg4n102aopnjfhefftl7lp.apps.googleusercontent.com}
+
 binance:
   rest:
     base-url: https://api.binance.com/api/v3
@@ -87,10 +82,6 @@ trades:
     - 1h
     - 4h
     - 1d
-vnpay:
-  tmn-code: J7ONSQWU
-  hash-secret: Z06DUF32BD8DMAEVP8M6V3A2DNU6SFLO
-  pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-  return-url: http://localhost:5173/payment-result
+
 
 

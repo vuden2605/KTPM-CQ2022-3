@@ -54,8 +54,9 @@ class NewsInfo(BaseModel):
     title: str
     sentiment_score: float
     is_breaking: bool
-    content: Optional[str] = ""  # New field for content
-    author: Optional[str] = "Unknown" # New field for author
+    content: Optional[str] = ""
+    author: Optional[str] = "Unknown"
+    url: Optional[str] = ""  # New field for URL
 
 
 class PredictResponse(BaseModel):
@@ -167,7 +168,8 @@ def get_news_endpoint(symbol: str = "BTCUSDT", hours: int = 1):
                 sentiment_score=news.get('sentiment_score', 0.5),
                 is_breaking=news.get('is_breaking', False),
                 content=news.get('content', ''),  # Add content
-                author=news.get('author', 'Unknown')
+                author=news.get('author', 'Unknown'),
+                url=news.get('url', '')  # Add URL
             ))
         
         print(f"✓ Fetched {len(news_info_list)} news for {symbol}")

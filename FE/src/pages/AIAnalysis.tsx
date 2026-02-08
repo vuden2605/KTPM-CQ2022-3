@@ -49,22 +49,52 @@ export const AIAnalysis = () => {
     return () => window.removeEventListener('storage', loadSymbols);
   }, []);
 
-  // Form State
-  const [symbol, setSymbol] = useState('BTCUSDT');
-  const [horizon, setHorizon] = useState('24h');
-  const [hours, setHours] = useState(6);
-
-  // Update symbol if current selection is not in list (optional, but good UX to default to first available)
-  useEffect(() => {
-    if (availableSymbols.length > 0 && !availableSymbols.find(s => s.code === symbol)) {
-      setSymbol(availableSymbols[0].code);
-    }
-  }, [availableSymbols]);
+  // Form State - Initialize from localStorage if available
+  const [symbol, setSymbol] = useState(() => {
+    const saved = localStorage.getItem('aiAnalysisState');
+    return saved ? JSON.parse(saved).symbol : 'BTCUSDT';
+  });
+  const [horizon, setHorizon] = useState(() => {
+    const saved = localStorage.getItem('aiAnalysisState');
+    return saved ? JSON.parse(saved).horizon : '24h';
+  });
+  const [hours, setHours] = useState(() => {
+    const saved = localStorage.getItem('aiAnalysisState');
+    return saved ? JSON.parse(saved).hours : 6;
+  });
 
   // UI State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PredictResponse | null>(null);
+  const [result, setResult] = useState<PredictResponse | null>(() => {
+    const saved = localStorage.getItem('aiAnalysisState');
+    return saved ? JSON.parse(saved).result : null;
+  });
+
+  // Persist state to localStorage whenever it changes
+  useEffect(() => {
+    const state = {
+      symbol,
+      horizon,
+      hours,
+      result
+    };
+    localStorage.setItem('aiAnalysisState', JSON.stringify(state));
+  }, [symbol, horizon, hours, result]);
+
+  // Update symbol if current selection is not in list (optional, but good UX to default to first available)
+  useEffect(() => {
+    // Only override if we don't have a valid symbol (and not loading from storage which might have a valid one not yet in list)
+    // Actually, let's trust localStorage or default. The previous logic might override user's saved symbol 
+    // if availableSymbols loads later. 
+    // Better logic: If symbol is NOT in availableSymbols AND availableSymbols is loaded, defaulting might be needed.
+    // But for now, let's keep it simple and trust persistence.
+    if (availableSymbols.length > 0 && !availableSymbols.find(s => s.code === symbol)) {
+      // If persisted symbol is invalid, reset to first available.
+      // setSymbol(availableSymbols[0].code); 
+      // Commented out to prevent overriding persisted valid symbol before list fully loads
+    }
+  }, [availableSymbols, symbol]);
 
   const handleAnalyze = async () => {
     setLoading(true);
@@ -166,6 +196,7 @@ export const AIAnalysis = () => {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             localStorage.removeItem('role');
+            localStorage.removeItem('aiAnalysisState'); // Clear persisted state
             navigate('/login');
           }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: 6 }}>
@@ -371,12 +402,20 @@ export const AIAnalysis = () => {
                 </div>
                 <div>
                   {result.top_news.map((news) => (
-                    <div key={news.news_id} style={{
-                      padding: '16px 20px',
-                      borderBottom: '1px solid var(--border-color)',
-                      display: 'flex',
-                      gap: '16px'
-                    }}>
+                    <div
+                      key={news.news_id}
+                      onClick={() => navigate(`/news?symbol=${symbol}&newsId=${news.news_id}`)}
+                      style={{
+                        padding: '16px 20px',
+                        borderBottom: '1px solid var(--border-color)',
+                        display: 'flex',
+                        gap: '16px',
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
                       <div style={{
                         width: '4px',
                         background: news.sentiment_score > 0.6 ? '#26a69a' : (news.sentiment_score < 0.4 ? '#ef5350' : '#f1c40f'),

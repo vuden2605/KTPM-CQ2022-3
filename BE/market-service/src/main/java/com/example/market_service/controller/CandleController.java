@@ -5,9 +5,9 @@ import com.example.market_service.dto.response.ApiResponse;
 import com.example.market_service.dto.response.CandleResponse;
 import com.example.market_service.entity.Candle;
 import com.example.market_service.service.CandleService.ICandleService;
-import com.example.market_service.Utils.SecurityUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.security.SecurityUtil;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.bind.annotation.CrossOrigin;
 
@@ -16,12 +16,10 @@ import java.util.List;
 @RestController
 @CrossOrigin(origins = "*")
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/candles")
+@RequestMapping("/candles")
 @Slf4j
 public class CandleController {
 	private final ICandleService candleService;
-	private final SecurityUtil securityUtil;
-
 	@PostMapping
 	public ApiResponse<CandleResponse> createCandle(@RequestBody CandleCreationRequest request) {
 		log.info("Received request to create candle: {}", request);
@@ -45,11 +43,10 @@ public class CandleController {
 
 	@GetMapping("/recent")
 	public ApiResponse<List<Candle>> getRecentCandles(
+			@RequestHeader(value = "X-User-Role", required = false) String userRole,
 			@RequestParam("symbol") String symbol,
 			@RequestParam("interval") String interval) {
-		boolean isVip = securityUtil.hasRole("VIP");
-		log.info("User VIP status: {}", isVip);
-		log.info("currentUser: {}", securityUtil.getAuthentication());
+		boolean isVip = "VIP".equalsIgnoreCase(userRole);
 		List<Candle> candles = candleService.getRecentCandles(symbol, interval, isVip);
 
 		return ApiResponse.<List<Candle>>builder()

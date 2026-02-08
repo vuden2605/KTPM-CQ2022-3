@@ -11,6 +11,8 @@ public enum ErrorCode {
 	INVALID_GOOGLE_TOKEN(1004, "Invalid Google token", HttpStatus.UNAUTHORIZED),
 	GOOGLE_LOGIN_FAILED(1005, "Google login failed", HttpStatus.INTERNAL_SERVER_ERROR),
 	USER_ALREADY_EXISTS(1006, "User already exists", HttpStatus.BAD_REQUEST),
+	USERNAME_ALREADY_EXISTS(1008, "Username already exists", HttpStatus.BAD_REQUEST),
+	EMAIL_ALREADY_EXISTS(1009, "Email already exists", HttpStatus.BAD_REQUEST),
 	UNAUTHENTICATED(1007, "User is not authenticated", HttpStatus.UNAUTHORIZED);
 
 	private final int code;

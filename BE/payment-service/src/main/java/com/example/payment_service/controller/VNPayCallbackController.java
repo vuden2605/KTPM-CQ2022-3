@@ -1,56 +1,49 @@
 package com.example.payment_service.controller;
 
 import com.example.payment_service.config.VNPayConfig;
-import com.example.payment_service.utils.VNPayUtil;
 import com.example.payment_service.entity.Payment;
 import com.example.payment_service.repository.PaymentRepository;
-import com.example.payment_service.service.VipService.IVipService;
+import com.example.payment_service.utils.VNPayUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/vnpay")
+@RequestMapping("/vnpay")
 @RequiredArgsConstructor
+@Slf4j
 public class VNPayCallbackController {
-	private final PaymentRepository paymentRepository;
-	private final IVipService vipService;
-	private final VNPayConfig config;
 	private final VNPayUtil vNPayUtil;
-	@GetMapping("/ipn")
-	public ResponseEntity<?> handleReturn(@RequestParam Map<String, String> params) {
+	private final VNPayConfig config;
+	private final PaymentRepository paymentRepository;
 
-		String secureHash = params.remove("vnp_SecureHash");
-		params.remove("vnp_SecureHashType");
+	@GetMapping("/callback")
+	public ResponseEntity<String> vnpayCallback(@RequestParam Map<String, String> params) {
+		log.info("VNPay callback received: {}", params);
 
-		String hashData = vNPayUtil.buildQueryString(params);
-		String checkHash = vNPayUtil.hmacSHA512(
-				config.getHashSecret(), hashData);
+		Map<String, String> fields = new HashMap<>(params);
+		String secureHash = fields.remove("vnp_SecureHash");
+		fields.remove("vnp_SecureHashType");
+
+		String hashData = vNPayUtil.buildQueryString(fields);
+		String checkHash = vNPayUtil.hmacSHA512(config.getHashSecret(), hashData);
 
 		if (!checkHash.equals(secureHash)) {
+			log.error("Invalid signature");
 			return ResponseEntity.badRequest().body("Invalid signature");
 		}
 
 		String responseCode = params.get("vnp_ResponseCode");
 		String orderCode = params.get("vnp_TxnRef");
 
-		Payment payment = paymentRepository
-				.findByOrderId(orderCode)
-				.orElseThrow( () -> new RuntimeException("Payment not found"));
+		Payment payment = paymentRepository.findByOrderId(orderCode)
+				.orElseThrow(() -> new RuntimeException("Payment not found"));
 
-		if ("00".equals(responseCode)) {
-			payment.setPaymentStatus("SUCCESS");
-			vipService.upgradeVip(payment.getUser(), payment.getVipPackage());
-		} else {
-			payment.setPaymentStatus("FAILED");
-		}
-
-		paymentRepository.save(payment);
+		log.info("Payment callback: orderId={}, responseCode={}", orderCode, responseCode);
 
 		return ResponseEntity.ok("Payment processed");
 	}

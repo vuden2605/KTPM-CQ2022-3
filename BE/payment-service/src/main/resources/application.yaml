@@ -29,13 +29,35 @@ spring:
   jackson:
     time-zone: UTC
 
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+
 vnpay:
   tmn-code: J7ONSQWU
   hash-secret: Z06DUF32BD8DMAEVP8M6V3A2DNU6SFLO
   pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-  return-url: http://localhost:5173/payment-result
+  return-url: http://localhost:80/payment-result
+
+# Kafka Topics
+kafka:
+  topics:
+    vip-upgrade-events: vip-upgrade-events
 
 logging:
   level:
     root: INFO
     com.example.payment_service: DEBUG
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
