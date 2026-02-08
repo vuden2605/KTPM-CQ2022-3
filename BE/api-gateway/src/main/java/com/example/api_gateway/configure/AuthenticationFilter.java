@@ -20,6 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.stereotype.Component;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.util.CollectionUtils;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -32,14 +33,15 @@ import java.util.List;
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PACKAGE, makeFinal = true)
 public class AuthenticationFilter implements GlobalFilter, Ordered {
+	private final AntPathMatcher pathMatcher = new AntPathMatcher();
 	AuthenticationService authenticationService;
 	ObjectMapper objectMapper;
 
-	// Public endpoints không cần authentication
 	private final List<String> publicUrls = Arrays.asList(
 			"/auth/login",
 			"/auth/login/google",
-			"/auth/refresh-token"
+			"/auth/refresh-token",
+			"/candles/**"
 	);
 
 	@NonFinal
@@ -71,21 +73,22 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 				.flatMap(apiResponse -> {
 					if (apiResponse.getData().isValid()) {
 						String userId = apiResponse.getData().getUserId();
-
+						String userRole = apiResponse.getData().getScope();
 						if (userId == null) {
 							log.error("UserId is null in introspect response");
 							return unauthenticated(exchange.getResponse());
 						}
 
-						log.info("UserId from Auth Service: {}", userId);
-
 						ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
 								.header("X-User-Id", userId)
+								.header("X-User-Role", userRole)
 								.build();
 
+						log.info("Added headers X-User-Id: {}, X-User-Role: {} to request", userId, userRole);
 						ServerWebExchange modifiedExchange = exchange.mutate()
 								.request(modifiedRequest)
 								.build();
+
 
 						return chain.filter(modifiedExchange);
 					} else {
@@ -100,7 +103,10 @@ public class AuthenticationFilter implements GlobalFilter, Ordered {
 
 	private boolean isPublicEndpoint(ServerHttpRequest request) {
 		String path = request.getURI().getPath();
-		return publicUrls.stream().anyMatch(path::contains);
+
+		return publicUrls.stream().anyMatch(
+				publicUrl -> pathMatcher.match(apiPrefix + publicUrl, path)
+		);
 	}
 
 	@Override
