@@ -32,10 +32,7 @@ public class SecurityConfig {
 		httpSecurity.authorizeHttpRequests(request -> request
 				.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 				.requestMatchers(HttpMethod.POST,"/auth/**").permitAll()
-				.requestMatchers(HttpMethod.GET,"/candles/**").permitAll()
-				.requestMatchers(HttpMethod.POST,"/users/**").permitAll()
-				.requestMatchers(HttpMethod.POST,"/s3/**").permitAll()
-				.requestMatchers(HttpMethod.GET,"/s3/**").permitAll()
+				.requestMatchers("/users/**").permitAll()
 				.requestMatchers(
 						"/v3/api-docs/**",
 						"/swagger-ui/**",

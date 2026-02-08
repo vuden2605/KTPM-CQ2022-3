@@ -212,18 +212,10 @@ services:
       - "8888:8888"
     environment:
       APP_API_PREFIX: /api/v1
-
-      SPRING_CLOUD_GATEWAY_ROUTES_0_ID: auth_service
-      SPRING_CLOUD_GATEWAY_ROUTES_0_URI: http://auth-service:8088
-      SPRING_CLOUD_GATEWAY_ROUTES_0_PREDICATES_0: Path=/api/v1/auth/**
-
-      SPRING_CLOUD_GATEWAY_ROUTES_1_ID: payment_service
-      SPRING_CLOUD_GATEWAY_ROUTES_1_URI: http://payment-service:8089
-      SPRING_CLOUD_GATEWAY_ROUTES_1_PREDICATES_0: Path=/api/v1/payment/**
-
-      SPRING_CLOUD_GATEWAY_ROUTES_2_ID: market_service
-      SPRING_CLOUD_GATEWAY_ROUTES_2_URI: http://market-service:8082
-      SPRING_CLOUD_GATEWAY_ROUTES_2_PREDICATES_0: Path=/api/v1/candles/**
+      AUTH_SERVICE_URL: http://auth-service:8088
+      USER_SERVICE_URL: http://auth-service:8088
+      PAYMENT_SERVICE_URL: http://payment-service:8089
+      MARKET_SERVICE_URL: http://market-service:8082
       JAVA_OPTS: -Xms128m -Xmx256m
     networks:
       - crypto-network

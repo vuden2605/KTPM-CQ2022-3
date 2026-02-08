@@ -43,7 +43,7 @@ public class CandleController {
 
 	@GetMapping("/recent")
 	public ApiResponse<List<Candle>> getRecentCandles(
-			@RequestParam("X-User-Role") String userRole,
+			@RequestHeader(value = "X-User-Role", required = false) String userRole,
 			@RequestParam("symbol") String symbol,
 			@RequestParam("interval") String interval) {
 		boolean isVip = "VIP".equalsIgnoreCase(userRole);

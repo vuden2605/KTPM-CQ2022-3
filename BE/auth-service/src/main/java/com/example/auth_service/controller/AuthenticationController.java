@@ -13,17 +13,20 @@ import com.example.auth_service.service.AuthenticationService.IAuthenticationSer
 import com.example.auth_service.service.JwtService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/auth")
+@Slf4j
 public class AuthenticationController {
 	private final IAuthenticationService authenticationService;
 	private final JwtService jwtService;
 
 	@PostMapping("/login")
 	public ApiResponse<AuthenticationResponse> login(@RequestBody @Valid LoginRequest request) {
+		log.info("Login attempt for user: {}", request.getUserName());
 		return ApiResponse.<AuthenticationResponse>builder()
 				.message("Login successful")
 				.data(authenticationService.login(request))
