@@ -701,7 +701,7 @@ if __name__ == "__main__":
     
     df_result = run_pipeline(
         start_date="2025-12-01",
-        end_date="2026-02-02",
+        end_date="2026-06-02",
         window_hours=1,
         save_to_mongodb=True,
         save_to_csv=True
