@@ -55,53 +55,121 @@
     <!-- Filter Section -->
     <section class="filter-section">
         <div class="container-fluid">
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input 
-                            type="text" 
-                            class="form-control" 
-                            id="searchInput" 
-                            placeholder="Tìm kiếm tin tức..."
-                            onkeyup="filterNews()"
-                        >
+            <div class="filter-card rounded-3 mb-3">
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+                    <div>
+                        <h6 class="mb-1"><i class="fas fa-filter me-2"></i>Bộ lọc tin tức</h6>
+                        <small class="text-muted">Kết hợp từ khóa, nguồn tin, cảm xúc và khoảng ngày để thu hẹp kết quả.</small>
                     </div>
                 </div>
-                <div class="col-md-2">
-                    <select class="form-select" id="sourceFilter" onchange="filterNewsImmediate()">
-                        <option value="">Tất cả nguồn tin</option>
-                        <option value="coindesk">CoinDesk</option>
-                        <option value="cointelegraph">Cointelegraph</option>
-                        <option value="decrypt">Decrypt</option>
-                        <option value="reuters">Reuters</option>
-                    </select>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label for="searchInput" class="form-label mb-1 small text-muted">Từ khóa</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input 
+                                type="text" 
+                                class="form-control" 
+                                id="searchInput" 
+                                placeholder="Tìm kiếm tiêu đề, nội dung, tóm tắt..."
+                                onkeyup="filterNews()"
+                            >
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="sourceFilter" class="form-label mb-1 small text-muted">Nguồn tin</label>
+                        <select class="form-select" id="sourceFilter" onchange="filterNewsImmediate()">
+                            <option value="">Tất cả nguồn tin</option>
+                            <option value="coindesk">CoinDesk</option>
+                            <option value="cointelegraph">Cointelegraph</option>
+                            <option value="decrypt">Decrypt</option>
+                            <option value="cnbc">CNBC</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="sentimentFilter" class="form-label mb-1 small text-muted">Cảm xúc</label>
+                        <select class="form-select" id="sentimentFilter" onchange="filterNewsImmediate()">
+                            <option value="">Tất cả cảm xúc</option>
+                            <option value="positive">Tích cực</option>
+                            <option value="negative">Tiêu cực</option>
+                            <option value="neutral">Trung lập</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label for="fromDate" class="form-label mb-1 small text-muted">Từ ngày</label>
+                        <input type="date" id="fromDate" class="form-control" onchange="filterNewsImmediate()" />
+                    </div>
+                    <div class="col-md-2">
+                        <label for="toDate" class="form-label mb-1 small text-muted">Đến ngày</label>
+                        <input type="date" id="toDate" class="form-control" onchange="filterNewsImmediate()" />
+                    </div>
+                    <div class="col-md-2">
+                        <label for="symbolFilter" class="form-label mb-1 small text-muted">Đồng (ví dụ: BTC)</label>
+                        <input type="text" id="symbolFilter" class="form-control" placeholder="BTC, ETH..." onchange="filterNewsImmediate()" />
+                    </div>
                 </div>
-                <div class="col-md-2">
-                    <select class="form-select" id="sentimentFilter" onchange="filterNewsImmediate()">
-                        <option value="">Tất cả cảm xúc</option>
-                        <option value="positive">Tích cực</option>
-                        <option value="negative">Tiêu cực</option>
-                        <option value="neutral">Trung lập</option>
-                    </select>
+                <div class="row g-3 mt-3">
+                    <div class="col-md-3">
+                        <button 
+                            class="btn btn-primary w-100" 
+                            onclick="refreshNews()"
+                            title="Tải lại dữ liệu mới nhất (giữ nguyên bộ lọc)"
+                        >
+                            <i class="fas fa-sync-alt me-2"></i>Làm mới dữ liệu
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <button 
+                            class="btn btn-outline-secondary w-100" 
+                            onclick="clearFilters()"
+                            title="Xóa tất cả bộ lọc và hiển thị toàn bộ tin tức"
+                        >
+                            <i class="fas fa-times me-2"></i>Xóa tất cả bộ lọc
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-2">
+            </div>
+            <!-- Crawler controls -->
+            <div class="row g-3 mt-3 align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <span class="fw-semibold"><i class="fas fa-robot me-2"></i>Chạy crawler lấy tin mới:</span>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="crawlSourceCoindesk" name="crawlSource" value="coindesk" checked>
+                            <label class="form-check-label" for="crawlSourceCoindesk">CoinDesk</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="crawlSourceCointelegraph" name="crawlSource" value="cointelegraph" checked>
+                            <label class="form-check-label" for="crawlSourceCointelegraph">Cointelegraph</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="crawlSourceDecrypt" name="crawlSource" value="decrypt" checked>
+                            <label class="form-check-label" for="crawlSourceDecrypt">Decrypt</label>
+                        </div>
+                        <div class="form-check form-check-inline">
+                            <input class="form-check-input" type="checkbox" id="crawlSourceCnbc" name="crawlSource" value="cnbc" checked>
+                            <label class="form-check-label" for="crawlSourceCnbc">CNBC</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-md-end">
                     <button 
-                        class="btn btn-primary w-100" 
-                        onclick="refreshNews()"
-                        title="Tải lại dữ liệu mới nhất (giữ nguyên bộ lọc)"
+                        id="crawlButton"
+                        class="btn btn-success"
+                        onclick="triggerCrawl()"
+                        title="Chạy crawler để lấy thêm tin mới từ các nguồn đã chọn"
                     >
-                        <i class="fas fa-sync-alt me-2"></i>Làm mới
+                        <i class="fas fa-play me-2"></i>Chạy crawler
                     </button>
-                </div>
-                <div class="col-md-2">
                     <button 
-                        class="btn btn-outline-secondary w-100" 
-                        onclick="clearFilters()"
-                        title="Xóa tất cả bộ lọc và hiển thị toàn bộ tin tức"
+                        id="crawlStopButton"
+                        class="btn btn-outline-danger ms-2"
+                        onclick="stopCrawl()"
+                        title="Gửi yêu cầu dừng crawler đang chạy"
                     >
-                        <i class="fas fa-times me-2"></i>Xóa lọc
+                        <i class="fas fa-stop me-2"></i>Dừng
                     </button>
+                    <span id="crawlStatus" class="ms-2 small text-muted"></span>
                 </div>
             </div>
         </div>

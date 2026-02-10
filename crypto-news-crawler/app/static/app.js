@@ -7,7 +7,10 @@ let totalNewsCount = 0;
 let currentFilters = {
     search: '',
     source: '',
-    sentiment: ''
+    sentiment: '',
+    fromDate: '',
+    toDate: '',
+    symbol: ''
 };
 const newsModal = new bootstrap.Modal(document.getElementById('newsModal'));
 
@@ -45,12 +48,18 @@ async function loadNews(page = 1) {
         if (currentFilters.source) params.append('source', currentFilters.source);
         if (currentFilters.sentiment) params.append('sentiment', currentFilters.sentiment);
         if (currentFilters.search) params.append('search', currentFilters.search);
+        if (currentFilters.fromDate) params.append('from_date', currentFilters.fromDate);
+        if (currentFilters.toDate) params.append('to_date', currentFilters.toDate);
+        if (currentFilters.symbol) params.append('symbol', currentFilters.symbol);
         
         // Build count parameters
         const countParams = new URLSearchParams();
         if (currentFilters.source) countParams.append('source', currentFilters.source);
         if (currentFilters.sentiment) countParams.append('sentiment', currentFilters.sentiment);
         if (currentFilters.search) countParams.append('search', currentFilters.search);
+        if (currentFilters.fromDate) countParams.append('from_date', currentFilters.fromDate);
+        if (currentFilters.toDate) countParams.append('to_date', currentFilters.toDate);
+        if (currentFilters.symbol) countParams.append('symbol', currentFilters.symbol);
         
         // Fetch news and total count in parallel
         const [newsResponse, countResponse] = await Promise.all([
@@ -121,6 +130,8 @@ function createNewsCard(news) {
     const formattedDate = formatDate(date);
     const sentimentClass = getSentimentClass(news.sentiment_label);
     const sentimentLabel = getSentimentLabel(news.sentiment_label);
+    const symbols = Array.isArray(news.symbols) ? news.symbols : [];
+    const symbolsText = symbols.length ? symbols.join(', ') : '';
     
     return `
         <div class="col-lg-4 col-md-6">
@@ -131,13 +142,16 @@ function createNewsCard(news) {
                 <div class="news-card-body">
                     <span class="news-source-badge">${capitalizeSource(news.source)}</span>
                     <h3 class="news-card-title">${news.title}</h3>
-                    <p class="news-card-summary">${news.content || news.summary || 'Không có mô tả'}</p>
+                    <p class="news-card-summary">${news.content || 'Không có mô tả'}</p>
                     <div class="news-card-meta">
                         <span class="news-card-date">
                             <i class="fas fa-calendar-alt"></i>
                             ${formattedDate}
                         </span>
-                        ${news.sentiment_label ? `<span class="sentiment-badge sentiment-${sentimentClass}">${sentimentLabel}</span>` : ''}
+                        <div class="d-flex flex-column align-items-end text-end">
+                            ${symbolsText ? `<span class="news-symbols small mb-1"><i class="fas fa-coins me-1"></i>${symbolsText}</span>` : ''}
+                            ${news.sentiment_label ? `<span class="sentiment-badge sentiment-${sentimentClass}">${sentimentLabel}</span>` : ''}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -157,20 +171,16 @@ function showNewsDetail(news) {
                 <span class="badge bg-primary">${capitalizeSource(news.source)}</span>
                 <span class="badge bg-secondary ms-2">${news.language}</span>
             </div>
-            
+            ${Array.isArray(news.symbols) && news.symbols.length ? `
+            <p><strong>Đồng liên quan:</strong> ${news.symbols.join(', ')}</p>
+            ` : ''}
+
             ${news.author ? `<p><strong>Tác giả:</strong> ${news.author}</p>` : ''}
             
             ${news.published_at ? `
                 <p><strong>Ngày xuất bản:</strong> ${formatDateTime(new Date(news.published_at))}</p>
             ` : ''}
-            
-            ${news.summary ? `
-                <div class="mt-4">
-                    <h6>Tóm tắt</h6>
-                    <p>${news.summary}</p>
-                </div>
-            ` : ''}
-            
+
             ${news.content ? `
                 <div class="mt-4">
                     <h6>Nội dung</h6>
@@ -211,6 +221,9 @@ function filterNews() {
         currentFilters.search = document.getElementById('searchInput').value.trim();
         currentFilters.source = document.getElementById('sourceFilter').value;
         currentFilters.sentiment = document.getElementById('sentimentFilter').value;
+        currentFilters.fromDate = document.getElementById('fromDate').value;
+        currentFilters.toDate = document.getElementById('toDate').value;
+        currentFilters.symbol = document.getElementById('symbolFilter') ? document.getElementById('symbolFilter').value.trim().toUpperCase() : '';
         
         // Reset to page 1 and reload
         loadNews(1);
@@ -225,6 +238,9 @@ function filterNewsImmediate() {
     currentFilters.search = document.getElementById('searchInput').value.trim();
     currentFilters.source = document.getElementById('sourceFilter').value;
     currentFilters.sentiment = document.getElementById('sentimentFilter').value;
+    currentFilters.fromDate = document.getElementById('fromDate').value;
+    currentFilters.toDate = document.getElementById('toDate').value;
+    currentFilters.symbol = document.getElementById('symbolFilter') ? document.getElementById('symbolFilter').value.trim().toUpperCase() : '';
     
     // Reset to page 1 and reload
     loadNews(1);
@@ -238,11 +254,17 @@ function clearFilters() {
     document.getElementById('searchInput').value = '';
     document.getElementById('sourceFilter').value = '';
     document.getElementById('sentimentFilter').value = '';
+    if (document.getElementById('fromDate')) document.getElementById('fromDate').value = '';
+    if (document.getElementById('toDate')) document.getElementById('toDate').value = '';
+    if (document.getElementById('symbolFilter')) document.getElementById('symbolFilter').value = '';
     
     // Clear current filters
     currentFilters.search = '';
     currentFilters.source = '';
     currentFilters.sentiment = '';
+    currentFilters.fromDate = '';
+    currentFilters.toDate = '';
+    currentFilters.symbol = '';
     
     // Reload news
     loadNews(1);
@@ -390,6 +412,14 @@ function updateFilterDisplay() {
         const sentimentName = document.getElementById('sentimentFilter').selectedOptions[0].text;
         activeFilters.push(`Cảm xúc: ${sentimentName}`);
     }
+    if (currentFilters.fromDate || currentFilters.toDate) {
+        const fromLabel = currentFilters.fromDate || '...';
+        const toLabel = currentFilters.toDate || '...';
+        activeFilters.push(`Khoảng ngày: ${fromLabel} → ${toLabel}`);
+    }
+    if (currentFilters.symbol) {
+        activeFilters.push(`Đồng: ${currentFilters.symbol}`);
+    }
     
     // Display active filters if any
     const filterDisplay = document.getElementById('activeFiltersDisplay');
@@ -484,4 +514,105 @@ function capitalizeSource(source) {
     return source.split(/(?=[A-Z])/).map(word => 
         word.charAt(0).toUpperCase() + word.slice(1)
     ).join(' ');
+}
+
+/**
+ * Gửi yêu cầu dừng crawler hiện tại
+ */
+async function stopCrawl() {
+    const button = document.getElementById('crawlStopButton');
+    const statusEl = document.getElementById('crawlStatus');
+    if (!button) return;
+
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Đang dừng...';
+
+    try {
+        const resp = await fetch('/api/admin/crawl/stop', {
+            method: 'POST',
+        });
+
+        if (!resp.ok) {
+            throw new Error('HTTP error ' + resp.status);
+        }
+
+        const data = await resp.json();
+        if (statusEl) {
+            if (data.is_running) {
+                statusEl.textContent = 'Đã gửi yêu cầu dừng. Crawler sẽ dừng sau khi hoàn thành nguồn hiện tại.';
+            } else {
+                statusEl.textContent = 'Hiện không có crawler nào đang chạy.';
+            }
+        }
+
+        setTimeout(() => {
+            if (statusEl) statusEl.textContent = '';
+        }, 5000);
+    } catch (err) {
+        console.error('Error stopping crawl:', err);
+        if (statusEl) {
+            statusEl.textContent = 'Lỗi khi gửi yêu cầu dừng. Vui lòng thử lại.';
+        }
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
+}
+
+/**
+ * Trigger crawlers from UI
+ */
+async function triggerCrawl() {
+    const button = document.getElementById('crawlButton');
+    const statusEl = document.getElementById('crawlStatus');
+    if (!button) return;
+
+    const originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Đang chạy...';
+    if (statusEl) {
+        statusEl.textContent = 'Đang chạy crawler, vui lòng đợi...';
+    }
+
+    try {
+        const checkedSources = Array.from(document.querySelectorAll('input[name="crawlSource"]:checked'))
+            .map(el => el.value);
+
+        const payload = { sources: checkedSources };
+
+        const resp = await fetch('/api/admin/crawl', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!resp.ok) {
+            throw new Error('HTTP error ' + resp.status);
+        }
+
+        await resp.json();
+
+        if (statusEl) {
+            statusEl.textContent = 'Crawl hoàn tất. Đang tải lại tin tức...';
+        }
+
+        await loadNews(1);
+
+        if (statusEl) {
+            setTimeout(() => {
+                statusEl.textContent = '';
+            }, 5000);
+        }
+    } catch (err) {
+        console.error('Error triggering crawl:', err);
+        if (statusEl) {
+            statusEl.textContent = 'Lỗi khi chạy crawler. Vui lòng thử lại.';
+        }
+    } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+    }
 }

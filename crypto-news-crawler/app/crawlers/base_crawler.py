@@ -1127,7 +1127,7 @@ class BaseNewsCrawler:
 
         normalized = normalize_article(raw_data, self.source_code, url)
 
-        # Extract symbols and attach to ExtraJson when available
+        # Extract symbols and attach to ExtraJson + top-level field when available
         try:
             symbols = extract_symbols_from_article(
                 title=normalized.get("Title") or "",
@@ -1146,6 +1146,8 @@ class BaseNewsCrawler:
                     data = {}
                 data["symbols"] = symbols
                 normalized["ExtraJson"] = _json.dumps(data, ensure_ascii=False)
+                # Also store as top-level field for easier querying in Mongo
+                normalized["Symbols"] = symbols
         except Exception:
             pass
 

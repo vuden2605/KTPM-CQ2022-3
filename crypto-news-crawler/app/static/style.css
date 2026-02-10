@@ -76,9 +76,27 @@ body {
 /* Filter Section */
 .filter-section {
     background: white;
-    padding: 25px 0;
+    padding: 20px 0 25px 0;
     margin-bottom: 40px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.filter-card {
+    background: #f9fafb;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    padding: 16px 20px 18px 20px;
+}
+
+.filter-card h6 {
+    font-weight: 600;
+    color: #111827;
+}
+
+.filter-card .form-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .input-group,
@@ -121,6 +139,11 @@ body {
     border-color: #9ca3af;
     color: #374151;
     transform: translateY(-2px);
+}
+
+.filter-section .btn-primary,
+.filter-section .btn-outline-secondary {
+    height: 44px;
 }
 
 /* News Section */
@@ -208,6 +231,10 @@ body {
     margin-top: auto;
     padding-top: 12px;
     border-top: 1px solid #f3f4f6;
+}
+
+.news-symbols {
+    color: #4b5563;
 }
 
 .news-card-date {
